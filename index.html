@@ -483,6 +483,7 @@ const Stage1 = {
       btn.type = "button";
       btn.addEventListener("click", () => {
         if (!confirm("Tüm ilerleme silinecek ve A1'den baştan başlanacak. Emin misin?")) return;
+        clearTimeout(autoNextTimer);
         clearSaved();
         state = freshState();
         save(state);
@@ -551,12 +552,16 @@ const Stage1 = {
       return box;
     }
 
-    function nextButton(card) {
-      const next = el("button", "primary", "Sonraki Kart");
-      next.type = "button";
-      next.addEventListener("click", () => { state.round.lastAnswer = null; save(state); render(); });
-      card.append(next);
-      queueMicrotask(() => next.focus());
+    // Cevaptan sonra sonuç kısa süre görünür, ardından kendiliğinden sonraki karta geçilir.
+    const AUTO_NEXT_MS = { correct: 1000, wrong: 2500 };
+    let autoNextTimer = null;
+    function autoNext(isCorrect) {
+      clearTimeout(autoNextTimer);
+      autoNextTimer = setTimeout(() => {
+        state.round.lastAnswer = null;
+        save(state);
+        render();
+      }, isCorrect ? AUTO_NEXT_MS.correct : AUTO_NEXT_MS.wrong);
     }
 
     function recordAnswer(isCorrect, lastAnswer) {
@@ -601,7 +606,7 @@ const Stage1 = {
         feedback.textContent = isCorrect
           ? "Doğru!"
           : "Yanlış. Doğru cevap: " + correctLetter + ") " + word.tr;
-        nextButton(card);
+        autoNext(isCorrect);
       }
 
       function answer(picked) {
@@ -652,7 +657,7 @@ const Stage1 = {
         feedback.textContent = isCorrect
           ? "Doğru! (" + word.tr + ")"
           : "Yanlış. Doğrusu: " + word.tr + " — bu kelime turun sonunda tekrar gelecek.";
-        nextButton(card);
+        autoNext(isCorrect);
       }
 
       form.addEventListener("submit", event => {
