@@ -1,0 +1,684 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>İngilizce Kartlar</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#2563eb">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Kartlar">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --card: #ffffff;
+    --text: #1f2933;
+    --muted: #6b7280;
+    --border: #d9dde3;
+    --accent: #2563eb;
+    --correct: #16a34a;
+    --correct-bg: #dcfce7;
+    --wrong: #dc2626;
+    --wrong-bg: #fee2e2;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex;
+    justify-content: center;
+    padding: 24px 16px;
+  }
+  #app { width: 100%; max-width: 440px; }
+
+  .level-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 10px;
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .level-bar strong { color: var(--text); font-size: 16px; }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .stat {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 4px;
+    text-align: center;
+  }
+  .stat-value { font-size: 20px; font-weight: 700; }
+  .stat-label { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .stat-value.correct { color: var(--correct); }
+  .stat-value.wrong { color: var(--wrong); }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 28px 20px;
+  }
+  .word {
+    text-align: center;
+    font-size: 34px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    margin: 4px 0 24px;
+    word-break: break-word;
+  }
+  .options { display: flex; flex-direction: column; gap: 10px; }
+  .option {
+    width: 100%;
+    text-align: left;
+    font-size: 17px;
+    padding: 14px 16px;
+    border-radius: 10px;
+    border: 2px solid var(--border);
+    background: var(--card);
+    color: var(--text);
+    cursor: pointer;
+  }
+  .option:hover:not(:disabled) { border-color: var(--accent); }
+  .option:disabled { cursor: default; }
+  .option .letter { font-weight: 700; margin-right: 8px; }
+  .option.correct { border-color: var(--correct); background: var(--correct-bg); }
+  .option.wrong { border-color: var(--wrong); background: var(--wrong-bg); }
+
+  .write-form { display: flex; flex-direction: column; gap: 10px; }
+  .write-input {
+    width: 100%;
+    font-size: 17px;
+    padding: 14px 16px;
+    border-radius: 10px;
+    border: 2px solid var(--border);
+    background: var(--card);
+    color: var(--text);
+  }
+  .write-input:focus { outline: none; border-color: var(--accent); }
+  .write-input.correct { border-color: var(--correct); background: var(--correct-bg); }
+  .write-input.wrong { border-color: var(--wrong); background: var(--wrong-bg); }
+  .write-hint { text-align: center; color: var(--muted); font-size: 14px; margin: -12px 0 16px; }
+
+  .feedback { margin-top: 16px; font-weight: 600; text-align: center; min-height: 1.4em; }
+  .feedback.correct { color: var(--correct); }
+  .feedback.wrong { color: var(--wrong); }
+
+  .primary {
+    display: block;
+    width: 100%;
+    margin-top: 16px;
+    padding: 14px;
+    font-size: 17px;
+    font-weight: 700;
+    border: none;
+    border-radius: 10px;
+    background: var(--accent);
+    color: #fff;
+    cursor: pointer;
+  }
+  .remaining { text-align: center; color: var(--muted); font-size: 13px; margin-top: 12px; }
+  .summary { text-align: center; line-height: 1.6; }
+  .summary h2 { margin: 0 0 8px; font-size: 22px; }
+  .summary p { margin: 6px 0; }
+  .reset {
+    display: block;
+    margin: 20px auto 0;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 13px;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+/* =========================================================================
+   1) AYARLAR
+   ========================================================================= */
+const STORAGE_KEY = "ingilizce-kartlar.v2";
+
+/* =========================================================================
+   2) KELİME LİSTELERİ — her seviyede 100 kelime
+   Bir seviye içinde her Türkçe anlam tektir; yanlış seçenek asla
+   başka bir kartın doğru cevabıyla karışmaz.
+   ========================================================================= */
+const A1_WORDS = [
+  { en: "breakfast", tr: "Kahvaltı" },
+  { en: "lunch", tr: "Öğle yemeği" },
+  { en: "dinner", tr: "Akşam yemeği" },
+  { en: "apple", tr: "Elma" },
+  { en: "bread", tr: "Ekmek" },
+  { en: "water", tr: "Su" },
+  { en: "milk", tr: "Süt" },
+  { en: "egg", tr: "Yumurta" },
+  { en: "cheese", tr: "Peynir" },
+  { en: "tea", tr: "Çay" },
+  { en: "coffee", tr: "Kahve" },
+  { en: "house", tr: "Ev" },
+  { en: "door", tr: "Kapı" },
+  { en: "window", tr: "Pencere" },
+  { en: "table", tr: "Masa" },
+  { en: "chair", tr: "Sandalye" },
+  { en: "bed", tr: "Yatak" },
+  { en: "kitchen", tr: "Mutfak" },
+  { en: "room", tr: "Oda" },
+  { en: "book", tr: "Kitap" },
+  { en: "pen", tr: "Kalem" },
+  { en: "school", tr: "Okul" },
+  { en: "teacher", tr: "Öğretmen" },
+  { en: "student", tr: "Öğrenci" },
+  { en: "friend", tr: "Arkadaş" },
+  { en: "family", tr: "Aile" },
+  { en: "mother", tr: "Anne" },
+  { en: "father", tr: "Baba" },
+  { en: "sister", tr: "Kız kardeş" },
+  { en: "brother", tr: "Erkek kardeş" },
+  { en: "child", tr: "Çocuk" },
+  { en: "baby", tr: "Bebek" },
+  { en: "man", tr: "Adam" },
+  { en: "woman", tr: "Kadın" },
+  { en: "dog", tr: "Köpek" },
+  { en: "cat", tr: "Kedi" },
+  { en: "bird", tr: "Kuş" },
+  { en: "fish", tr: "Balık" },
+  { en: "horse", tr: "At" },
+  { en: "car", tr: "Araba" },
+  { en: "bus", tr: "Otobüs" },
+  { en: "train", tr: "Tren" },
+  { en: "bicycle", tr: "Bisiklet" },
+  { en: "road", tr: "Yol" },
+  { en: "city", tr: "Şehir" },
+  { en: "country", tr: "Ülke" },
+  { en: "sea", tr: "Deniz" },
+  { en: "sun", tr: "Güneş" },
+  { en: "moon", tr: "Ay" },
+  { en: "star", tr: "Yıldız" },
+  { en: "rain", tr: "Yağmur" },
+  { en: "snow", tr: "Kar" },
+  { en: "tree", tr: "Ağaç" },
+  { en: "flower", tr: "Çiçek" },
+  { en: "day", tr: "Gün" },
+  { en: "night", tr: "Gece" },
+  { en: "morning", tr: "Sabah" },
+  { en: "week", tr: "Hafta" },
+  { en: "year", tr: "Yıl" },
+  { en: "today", tr: "Bugün" },
+  { en: "tomorrow", tr: "Yarın" },
+  { en: "yesterday", tr: "Dün" },
+  { en: "red", tr: "Kırmızı" },
+  { en: "blue", tr: "Mavi" },
+  { en: "green", tr: "Yeşil" },
+  { en: "yellow", tr: "Sarı" },
+  { en: "black", tr: "Siyah" },
+  { en: "white", tr: "Beyaz" },
+  { en: "big", tr: "Büyük" },
+  { en: "small", tr: "Küçük" },
+  { en: "hot", tr: "Sıcak" },
+  { en: "cold", tr: "Soğuk" },
+  { en: "new", tr: "Yeni" },
+  { en: "old", tr: "Eski" },
+  { en: "happy", tr: "Mutlu" },
+  { en: "sad", tr: "Üzgün" },
+  { en: "good", tr: "İyi" },
+  { en: "bad", tr: "Kötü" },
+  { en: "fast", tr: "Hızlı" },
+  { en: "slow", tr: "Yavaş" },
+  { en: "eat", tr: "Yemek yemek" },
+  { en: "drink", tr: "İçmek" },
+  { en: "sleep", tr: "Uyumak" },
+  { en: "read", tr: "Okumak" },
+  { en: "write", tr: "Yazmak" },
+  { en: "run", tr: "Koşmak" },
+  { en: "walk", tr: "Yürümek" },
+  { en: "open", tr: "Açmak" },
+  { en: "close", tr: "Kapatmak" },
+  { en: "buy", tr: "Satın almak" },
+  { en: "sell", tr: "Satmak" },
+  { en: "help", tr: "Yardım etmek" },
+  { en: "hand", tr: "El" },
+  { en: "head", tr: "Baş" },
+  { en: "eye", tr: "Göz" },
+  { en: "ear", tr: "Kulak" },
+  { en: "mouth", tr: "Ağız" },
+  { en: "money", tr: "Para" },
+  { en: "hospital", tr: "Hastane" },
+  { en: "music", tr: "Müzik" },
+];
+
+const A2_WORDS = [
+  { en: "airport", tr: "Havalimanı" },
+  { en: "ticket", tr: "Bilet" },
+  { en: "journey", tr: "Yolculuk" },
+  { en: "holiday", tr: "Tatil" },
+  { en: "weather", tr: "Hava durumu" },
+  { en: "cloud", tr: "Bulut" },
+  { en: "wind", tr: "Rüzgar" },
+  { en: "river", tr: "Nehir" },
+  { en: "mountain", tr: "Dağ" },
+  { en: "island", tr: "Ada" },
+  { en: "village", tr: "Köy" },
+  { en: "bridge", tr: "Köprü" },
+  { en: "building", tr: "Bina" },
+  { en: "library", tr: "Kütüphane" },
+  { en: "museum", tr: "Müze" },
+  { en: "market", tr: "Pazar" },
+  { en: "price", tr: "Fiyat" },
+  { en: "cheap", tr: "Ucuz" },
+  { en: "expensive", tr: "Pahalı" },
+  { en: "wallet", tr: "Cüzdan" },
+  { en: "job", tr: "İş" },
+  { en: "office", tr: "Ofis" },
+  { en: "manager", tr: "Müdür" },
+  { en: "meeting", tr: "Toplantı" },
+  { en: "salary", tr: "Maaş" },
+  { en: "neighbour", tr: "Komşu" },
+  { en: "guest", tr: "Misafir" },
+  { en: "wedding", tr: "Düğün" },
+  { en: "birthday", tr: "Doğum günü" },
+  { en: "gift", tr: "Hediye" },
+  { en: "health", tr: "Sağlık" },
+  { en: "medicine", tr: "İlaç" },
+  { en: "pain", tr: "Ağrı" },
+  { en: "fever", tr: "Ateş" },
+  { en: "dentist", tr: "Diş hekimi" },
+  { en: "vegetable", tr: "Sebze" },
+  { en: "fruit", tr: "Meyve" },
+  { en: "meat", tr: "Et" },
+  { en: "rice", tr: "Pirinç" },
+  { en: "soup", tr: "Çorba" },
+  { en: "salt", tr: "Tuz" },
+  { en: "sugar", tr: "Şeker" },
+  { en: "knife", tr: "Bıçak" },
+  { en: "spoon", tr: "Kaşık" },
+  { en: "fork", tr: "Çatal" },
+  { en: "plate", tr: "Tabak" },
+  { en: "glass", tr: "Bardak" },
+  { en: "clothes", tr: "Kıyafet" },
+  { en: "shoe", tr: "Ayakkabı" },
+  { en: "jacket", tr: "Ceket" },
+  { en: "hat", tr: "Şapka" },
+  { en: "mirror", tr: "Ayna" },
+  { en: "key", tr: "Anahtar" },
+  { en: "garden", tr: "Bahçe" },
+  { en: "wall", tr: "Duvar" },
+  { en: "roof", tr: "Çatı" },
+  { en: "stairs", tr: "Merdiven" },
+  { en: "noise", tr: "Gürültü" },
+  { en: "idea", tr: "Fikir" },
+  { en: "question", tr: "Soru" },
+  { en: "answer", tr: "Cevap" },
+  { en: "mistake", tr: "Hata" },
+  { en: "dream", tr: "Rüya" },
+  { en: "memory", tr: "Anı" },
+  { en: "future", tr: "Gelecek" },
+  { en: "past", tr: "Geçmiş" },
+  { en: "century", tr: "Yüzyıl" },
+  { en: "minute", tr: "Dakika" },
+  { en: "early", tr: "Erken" },
+  { en: "late", tr: "Geç" },
+  { en: "quiet", tr: "Sessiz" },
+  { en: "dangerous", tr: "Tehlikeli" },
+  { en: "safe", tr: "Güvenli" },
+  { en: "empty", tr: "Boş" },
+  { en: "full", tr: "Dolu" },
+  { en: "heavy", tr: "Ağır" },
+  { en: "easy", tr: "Kolay" },
+  { en: "difficult", tr: "Zor" },
+  { en: "strong", tr: "Güçlü" },
+  { en: "weak", tr: "Zayıf" },
+  { en: "rich", tr: "Zengin" },
+  { en: "poor", tr: "Fakir" },
+  { en: "clean", tr: "Temiz" },
+  { en: "dirty", tr: "Kirli" },
+  { en: "wet", tr: "Islak" },
+  { en: "dry", tr: "Kuru" },
+  { en: "tired", tr: "Yorgun" },
+  { en: "angry", tr: "Kızgın" },
+  { en: "worried", tr: "Endişeli" },
+  { en: "brave", tr: "Cesur" },
+  { en: "polite", tr: "Kibar" },
+  { en: "remember", tr: "Hatırlamak" },
+  { en: "forget", tr: "Unutmak" },
+  { en: "borrow", tr: "Ödünç almak" },
+  { en: "lend", tr: "Ödünç vermek" },
+  { en: "arrive", tr: "Varmak" },
+  { en: "invite", tr: "Davet etmek" },
+  { en: "explain", tr: "Açıklamak" },
+  { en: "choose", tr: "Seçmek" },
+  { en: "wait", tr: "Beklemek" },
+];
+
+// Seviyeler sırayla ilerler. Yeni seviye eklemek = bu listeye bir satır.
+const LEVELS = [
+  { id: "A1", words: A1_WORDS },
+  { id: "A2", words: A2_WORDS },
+];
+
+/* =========================================================================
+   3) ORTAK YARDIMCILAR — tüm aşamalar kullanabilir
+   ========================================================================= */
+function shuffle(list) {
+  const copy = list.slice();
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+// Tarayıcı kaydı kapalıysa (gizli pencere vb.) uygulama yine çalışır, sadece hatırlamaz.
+function loadSaved() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+function save(data) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch {}
+}
+function clearSaved() {
+  try { localStorage.removeItem(STORAGE_KEY); } catch {}
+}
+
+/* =========================================================================
+   4) AŞAMA 1 — Seçmeli tur + yanlışlar için yazma turu
+   Her seviye:
+     (1) Seçmeli tur: tüm kelimeler bir kez, iki seçenekle sorulur.
+     (2) Yazma turu: seçmeli turda yanlış cevaplanan kelimeler şıksız sorulur,
+         Türkçesi yazılır. Yanlış yazılan kelime turun sonuna tekrar eklenir.
+   Yazma turu bitince (ya da hiç yanlış yoksa) sonraki seviyeye geçilir.
+   Her aşama kendi içinde bağımsız: mount(container) ile ekrana çizilir.
+   ========================================================================= */
+
+// Büyük/küçük harf, fazla boşluk ve Türkçe harf farkı önemsenmez.
+function normalizeAnswer(text) {
+  const fold = { "ı": "i", "ş": "s", "ç": "c", "ğ": "g", "ö": "o", "ü": "u", "â": "a", "î": "i", "û": "u" };
+  return text
+    .toLocaleLowerCase("tr")
+    .replace(/[ışçğöüâîû]/g, ch => fold[ch])
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const Stage1 = {
+  mount(container) {
+    let state = loadSaved() || freshState();
+
+    function freshState() {
+      return startLevel({ levelIndex: 0 });
+    }
+
+    function startLevel(s) {
+      s.phase = "choice";
+      s.mistakes = [];
+      s.round = newRound(shuffle(LEVELS[s.levelIndex].words).map(w => w.en));
+      return s;
+    }
+
+    function newRound(deck) {
+      return { deck, index: 0, answered: 0, correct: 0, wrong: 0, lastAnswer: null };
+    }
+
+    function level() { return LEVELS[state.levelIndex]; }
+    function findWord(en) { return level().words.find(w => w.en === en); }
+
+    function wrongOptionFor(word) {
+      const others = level().words.filter(w => w.tr !== word.tr);
+      return others[Math.floor(Math.random() * others.length)].tr;
+    }
+
+    function renderTop() {
+      const r = state.round;
+      const bar = el("div", "level-bar");
+      const left = el("span");
+      left.append(el("strong", null, level().id), " · " + (state.phase === "choice" ? "Seçmeli tur" : "Yazma turu"));
+      bar.append(left);
+
+      const percent = r.answered === 0 ? 0 : Math.round((r.correct / r.answered) * 100);
+      const stats = el("div", "stats");
+      [
+        [r.answered, "Cevaplanan", ""],
+        [r.correct, "Doğru", "correct"],
+        [r.wrong, "Yanlış", "wrong"],
+        ["%" + percent, "Başarı", ""],
+      ].forEach(([value, label, tone]) => {
+        const box = el("div", "stat");
+        box.append(el("div", "stat-value " + tone, String(value)), el("div", "stat-label", label));
+        stats.append(box);
+      });
+
+      const top = el("div", "top");
+      top.append(bar, stats);
+      return top;
+    }
+
+    function resetButton() {
+      const btn = el("button", "reset", "İlerlemeyi sıfırla");
+      btn.type = "button";
+      btn.addEventListener("click", () => {
+        if (!confirm("Tüm ilerleme silinecek ve A1'den baştan başlanacak. Emin misin?")) return;
+        clearSaved();
+        state = freshState();
+        save(state);
+        render();
+      });
+      return btn;
+    }
+
+    function render() {
+      container.replaceChildren();
+      container.append(renderTop());
+      const r = state.round;
+      const card = el("div", "card");
+
+      if (r.index >= r.deck.length && !r.lastAnswer) {
+        card.append(renderSummary());
+      } else if (state.phase === "choice") {
+        renderChoiceCard(card);
+      } else {
+        renderWriteCard(card);
+      }
+      container.append(card, resetButton());
+    }
+
+    function actionButton(label, action) {
+      const btn = el("button", "primary", label);
+      btn.type = "button";
+      btn.addEventListener("click", () => { action(); save(state); render(); });
+      return btn;
+    }
+
+    // Tur sonu: seçmeli turdan yazma turuna, ya da sonraki seviyeye.
+    function renderSummary() {
+      const r = state.round;
+      const box = el("div", "summary");
+
+      if (state.phase === "choice" && state.mistakes.length > 0) {
+        const percent = Math.round((r.correct / r.answered) * 100);
+        box.append(
+          el("h2", null, "Seçmeli tur bitti"),
+          el("p", null, "Doğru: " + r.correct + " · Yanlış: " + r.wrong + " · Başarı: %" + percent),
+          el("p", null, "Yanlış yaptığın " + state.mistakes.length +
+            " kelimeyi şimdi şıksız soracağım; Türkçe anlamını yazacaksın."),
+          actionButton("Yazma turuna başla", () => {
+            state.phase = "write";
+            state.round = newRound(shuffle(state.mistakes));
+          }),
+        );
+        return box;
+      }
+
+      const hasNext = state.levelIndex + 1 < LEVELS.length;
+      box.append(el("h2", null, level().id + " tamamlandı!"));
+      if (hasNext) {
+        const nextId = LEVELS[state.levelIndex + 1].id;
+        box.append(
+          el("p", null, nextId + " seviyesine geçiyorsun."),
+          actionButton(nextId + " seviyesine başla", () => {
+            state.levelIndex++;
+            startLevel(state);
+          }),
+        );
+      } else {
+        box.append(el("p", null, "Şu an mevcut olan tüm seviyeleri tamamladın."));
+      }
+      return box;
+    }
+
+    function nextButton(card) {
+      const next = el("button", "primary", "Sonraki Kart");
+      next.type = "button";
+      next.addEventListener("click", () => { state.round.lastAnswer = null; save(state); render(); });
+      card.append(next);
+      queueMicrotask(() => next.focus());
+    }
+
+    function recordAnswer(isCorrect, lastAnswer) {
+      const r = state.round;
+      r.answered++;
+      if (isCorrect) r.correct++; else r.wrong++;
+      r.index++;
+      r.lastAnswer = lastAnswer;
+      save(state);
+      container.querySelector(".top").replaceWith(renderTop());
+    }
+
+    function renderChoiceCard(card) {
+      const r = state.round;
+      // Cevaplanmış ama "Sonraki Kart"a basılmamış kart varsa onu sonuçlu göster.
+      const pending = r.lastAnswer;
+      const word = findWord(pending ? pending.en : r.deck[r.index]);
+      const choices = pending ? pending.choices : shuffle([word.tr, wrongOptionFor(word)]); // doğru cevabın yeri rastgele
+
+      card.append(el("div", "word", word.en.toUpperCase()));
+
+      const options = el("div", "options");
+      const feedback = el("div", "feedback");
+      const buttons = choices.map((meaning, i) => {
+        const btn = el("button", "option");
+        btn.type = "button";
+        btn.append(el("span", "letter", (i === 0 ? "A" : "B") + ")"), meaning);
+        btn.addEventListener("click", () => answer(meaning));
+        options.append(btn);
+        return { btn, meaning };
+      });
+
+      function showResult(picked) {
+        const isCorrect = picked === word.tr;
+        buttons.forEach(({ btn, meaning }) => {
+          btn.disabled = true;
+          if (meaning === word.tr) btn.classList.add("correct");
+          else if (meaning === picked) btn.classList.add("wrong");
+        });
+        const correctLetter = choices.indexOf(word.tr) === 0 ? "A" : "B";
+        feedback.className = "feedback " + (isCorrect ? "correct" : "wrong");
+        feedback.textContent = isCorrect
+          ? "Doğru!"
+          : "Yanlış. Doğru cevap: " + correctLetter + ") " + word.tr;
+        nextButton(card);
+      }
+
+      function answer(picked) {
+        const isCorrect = picked === word.tr;
+        if (!isCorrect) state.mistakes.push(word.en);
+        recordAnswer(isCorrect, { en: word.en, choices, picked });
+        showResult(picked);
+      }
+
+      card.append(options, feedback);
+      const shownIndex = pending ? r.index : r.index + 1;
+      card.append(el("div", "remaining", "Kart " + shownIndex + " / " + r.deck.length));
+      if (pending) showResult(pending.picked);
+    }
+
+    function renderWriteCard(card) {
+      const r = state.round;
+      const pending = r.lastAnswer;
+      const word = findWord(pending ? pending.en : r.deck[r.index]);
+
+      card.append(el("div", "word", word.en.toUpperCase()));
+      card.append(el("div", "write-hint", "Türkçe anlamını yaz"));
+
+      const form = el("form", "write-form");
+      const input = el("input", "write-input");
+      input.type = "text";
+      input.autocomplete = "off";
+      input.setAttribute("autocapitalize", "off");
+      input.spellcheck = false;
+      const check = el("button", "primary", "Kontrol et");
+      check.type = "submit";
+      check.style.marginTop = "0";
+      form.append(input, check);
+
+      const feedback = el("div", "feedback");
+      const counter = el("div", "remaining");
+      const updateCounter = () => { counter.textContent = "Kalan kelime: " + (r.deck.length - r.index); };
+      updateCounter();
+
+      function showResult(typed) {
+        updateCounter();
+        const isCorrect = normalizeAnswer(typed) === normalizeAnswer(word.tr);
+        input.value = typed;
+        input.disabled = true;
+        input.classList.add(isCorrect ? "correct" : "wrong");
+        check.remove();
+        feedback.className = "feedback " + (isCorrect ? "correct" : "wrong");
+        feedback.textContent = isCorrect
+          ? "Doğru! (" + word.tr + ")"
+          : "Yanlış. Doğrusu: " + word.tr + " — bu kelime turun sonunda tekrar gelecek.";
+        nextButton(card);
+      }
+
+      form.addEventListener("submit", event => {
+        event.preventDefault();
+        const typed = input.value;
+        if (!typed.trim()) return;
+        const isCorrect = normalizeAnswer(typed) === normalizeAnswer(word.tr);
+        if (!isCorrect) r.deck.push(word.en); // doğru yazılana kadar tekrar sorulur
+        recordAnswer(isCorrect, { en: word.en, typed });
+        showResult(typed);
+      });
+
+      card.append(form, feedback, counter);
+      if (pending) showResult(pending.typed);
+      else queueMicrotask(() => input.focus()); // kart ekrana eklendikten sonra imleç kutuya gelsin
+    }
+
+    save(state);
+    render();
+  },
+};
+
+/* =========================================================================
+   BAŞLAT — şu an yalnızca Aşama 1 var
+   ========================================================================= */
+Stage1.mount(document.getElementById("app"));
+</script>
+</body>
+</html>
