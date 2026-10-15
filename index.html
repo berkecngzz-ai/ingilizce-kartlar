@@ -38,6 +38,9 @@
   }
   #app { width: 100%; max-width: 440px; }
 
+  .greeting { font-size: 20px; font-weight: 700; margin: 0 0 12px; word-break: break-word; }
+  .name-note { color: var(--muted); font-size: 13px; text-align: center; margin-top: 12px; }
+
   .level-bar {
     display: flex;
     justify-content: space-between;
@@ -155,6 +158,10 @@
    1) AYARLAR
    ========================================================================= */
 const STORAGE_KEY = "ingilizce-kartlar.v2";
+const CHOICE_COUNT = 4;            // seçmeli sorularda şık sayısı (1 doğru + 3 yanlış)
+const PLACEMENT_PER_LEVEL = 6;     // seviye testinde her seviyeden sorulan kelime
+const PLACEMENT_A1_PASS = 5;       // testte A1 sorularından en az bu kadar doğru → A2'den başla
+const NAME_MAX_LENGTH = 30;
 
 /* =========================================================================
    2) KELİME LİSTELERİ — her seviyede 100 kelime
@@ -407,10 +414,13 @@ function clearSaved() {
 }
 
 /* =========================================================================
-   4) AŞAMA 1 — Seçmeli tur + yanlışlar için yazma turu
-   Her seviye:
-     (1) Seçmeli tur: tüm kelimeler bir kez, iki seçenekle sorulur.
-     (2) Yazma turu: seçmeli turda yanlış cevaplanan kelimeler şıksız sorulur,
+   4) AŞAMA 1 — İsim, seviye testi, seçmeli tur + yanlışlar için yazma turu
+   Akış:
+     (0) İlk açılışta isim sorulur (yalnızca cihazda saklanır).
+     (1) Yeni kullanıcıya kısa seviye testi: her seviyeden karışık kelimeler,
+         4 şıklı. A1 sorularındaki başarıya göre A1 ya da A2'den başlanır.
+     (2) Seçmeli tur: seviyedeki tüm kelimeler bir kez, 4 şıkla sorulur.
+     (3) Yazma turu: seçmeli turda yanlış cevaplanan kelimeler şıksız sorulur,
          Türkçesi yazılır. Yanlış yazılan kelime turun sonuna tekrar eklenir.
    Yazma turu bitince (ya da hiç yanlış yoksa) sonraki seviyeye geçilir.
    Her aşama kendi içinde bağımsız: mount(container) ile ekrana çizilir.
@@ -426,12 +436,20 @@ function normalizeAnswer(text) {
     .trim();
 }
 
+const OPTION_LETTERS = "ABCDEFGH";
+
 const Stage1 = {
   mount(container) {
     let state = loadSaved() || freshState();
 
+    // Yeni kullanıcı: isim yok, seviye testi bekliyor.
+    // Eski kayıtta (bu sürümden önce) name/needsPlacement yoktur → yalnızca isim sorulur, ilerleme korunur.
     function freshState() {
-      return startLevel({ levelIndex: 0 });
+      const s = startLevel({ levelIndex: 0 });
+      s.name = null;
+      s.needsPlacement = true;
+      s.placement = null;
+      return s;
     }
 
     function startLevel(s) {
@@ -445,19 +463,41 @@ const Stage1 = {
       return { deck, index: 0, answered: 0, correct: 0, wrong: 0, lastAnswer: null };
     }
 
+    // Seviye testi: ilk iki seviyeden karışık kelimeler.
+    function newPlacement() {
+      const deck = [];
+      LEVELS.slice(0, 2).forEach((lvl, lvlIndex) => {
+        shuffle(lvl.words).slice(0, PLACEMENT_PER_LEVEL).forEach(w => deck.push({ lvl: lvlIndex, en: w.en }));
+      });
+      const p = newRound(shuffle(deck));
+      p.a1Correct = 0;
+      return p;
+    }
+
     function level() { return LEVELS[state.levelIndex]; }
     function findWord(en) { return level().words.find(w => w.en === en); }
+    function inPlacement() { return !!state.placement; }
 
-    function wrongOptionFor(word) {
-      const others = level().words.filter(w => w.tr !== word.tr);
-      return others[Math.floor(Math.random() * others.length)].tr;
+    // 1 doğru + (CHOICE_COUNT-1) farklı yanlış anlam, aynı seviyenin kelimelerinden; sıra rastgele.
+    function optionsFor(word, pool) {
+      const wrong = shuffle(pool.filter(w => w.tr !== word.tr))
+        .slice(0, CHOICE_COUNT - 1)
+        .map(w => w.tr);
+      return shuffle([word.tr, ...wrong]);
     }
 
     function renderTop() {
-      const r = state.round;
+      const top = el("div", "top");
+      top.append(el("div", "greeting", "Merhaba " + state.name + " 👋"));
+
+      const r = inPlacement() ? state.placement : state.round;
       const bar = el("div", "level-bar");
       const left = el("span");
-      left.append(el("strong", null, level().id), " · " + (state.phase === "choice" ? "Seçmeli tur" : "Yazma turu"));
+      if (inPlacement()) {
+        left.append(el("strong", null, "Seviye testi"));
+      } else {
+        left.append(el("strong", null, level().id), " · " + (state.phase === "choice" ? "Seçmeli tur" : "Yazma turu"));
+      }
       bar.append(left);
 
       const percent = r.answered === 0 ? 0 : Math.round((r.correct / r.answered) * 100);
@@ -473,7 +513,6 @@ const Stage1 = {
         stats.append(box);
       });
 
-      const top = el("div", "top");
       top.append(bar, stats);
       return top;
     }
@@ -482,7 +521,7 @@ const Stage1 = {
       const btn = el("button", "reset", "İlerlemeyi sıfırla");
       btn.type = "button";
       btn.addEventListener("click", () => {
-        if (!confirm("Tüm ilerleme silinecek ve A1'den baştan başlanacak. Emin misin?")) return;
+        if (!confirm("İsmin, seviye testi sonucun ve tüm ilerlemen silinecek; uygulama baştan başlayacak. Emin misin?")) return;
         clearTimeout(autoNextTimer);
         clearSaved();
         state = freshState();
@@ -494,16 +533,24 @@ const Stage1 = {
 
     function render() {
       container.replaceChildren();
-      container.append(renderTop());
-      const r = state.round;
       const card = el("div", "card");
 
-      if (r.index >= r.deck.length && !r.lastAnswer) {
-        card.append(renderSummary());
-      } else if (state.phase === "choice") {
-        renderChoiceCard(card);
+      if (!state.name) {
+        renderNameCard(card);
+        container.append(card);
+        return;
+      }
+
+      container.append(renderTop());
+      if (inPlacement()) {
+        const p = state.placement;
+        if (p.index >= p.deck.length && !p.lastAnswer) card.append(renderPlacementResult());
+        else renderPlacementCard(card);
       } else {
-        renderWriteCard(card);
+        const r = state.round;
+        if (r.index >= r.deck.length && !r.lastAnswer) card.append(renderSummary());
+        else if (state.phase === "choice") renderChoiceCard(card);
+        else renderWriteCard(card);
       }
       container.append(card, resetButton());
     }
@@ -513,6 +560,55 @@ const Stage1 = {
       btn.type = "button";
       btn.addEventListener("click", () => { action(); save(state); render(); });
       return btn;
+    }
+
+    function renderNameCard(card) {
+      const box = el("div", "summary");
+      box.append(el("h2", null, "Hoş geldin!"), el("p", null, "Adın ne?"));
+
+      const form = el("form", "write-form");
+      const input = el("input", "write-input");
+      input.type = "text";
+      input.maxLength = NAME_MAX_LENGTH;
+      input.autocomplete = "off";
+      input.placeholder = "Adını yaz";
+      const go = el("button", "primary", "Devam");
+      go.type = "submit";
+      go.style.marginTop = "0";
+      form.append(input, go);
+
+      form.addEventListener("submit", event => {
+        event.preventDefault();
+        const name = input.value.replace(/\s+/g, " ").trim().slice(0, NAME_MAX_LENGTH);
+        if (!name) { input.focus(); return; }
+        state.name = name;
+        if (state.needsPlacement) state.placement = newPlacement();
+        save(state);
+        render();
+      });
+
+      card.append(box, form, el("div", "name-note", "İsmin yalnızca bu cihazda saklanır."));
+      queueMicrotask(() => input.focus());
+    }
+
+    // Test sonucu: A1 sorularındaki başarıya göre başlangıç seviyesi.
+    function renderPlacementResult() {
+      const p = state.placement;
+      const startIndex = p.a1Correct >= PLACEMENT_A1_PASS ? 1 : 0;
+      const box = el("div", "summary");
+      box.append(
+        el("h2", null, "Seviye testi bitti"),
+        el("p", null, p.deck.length + " sorudan " + p.correct + " tanesini bildin."),
+        el("p", null, LEVELS[0].id + " kelimelerinden " + p.a1Correct + "/" + PLACEMENT_PER_LEVEL + " doğru."),
+        el("p", null, LEVELS[startIndex].id + " seviyesinden başlıyorsun."),
+        actionButton("Başla", () => {
+          state.placement = null;
+          state.needsPlacement = false;
+          state.levelIndex = startIndex;
+          startLevel(state);
+        }),
+      );
+      return box;
     }
 
     // Tur sonu: seçmeli turdan yazma turuna, ya da sonraki seviyeye.
@@ -555,31 +651,29 @@ const Stage1 = {
     // Cevaptan sonra sonuç kısa süre görünür, ardından kendiliğinden sonraki karta geçilir.
     const AUTO_NEXT_MS = { correct: 1000, wrong: 2500 };
     let autoNextTimer = null;
-    function autoNext(isCorrect) {
+    function autoNext(isCorrect, holder) {
       clearTimeout(autoNextTimer);
       autoNextTimer = setTimeout(() => {
-        state.round.lastAnswer = null;
+        holder.lastAnswer = null;
         save(state);
         render();
       }, isCorrect ? AUTO_NEXT_MS.correct : AUTO_NEXT_MS.wrong);
     }
 
-    function recordAnswer(isCorrect, lastAnswer) {
-      const r = state.round;
-      r.answered++;
-      if (isCorrect) r.correct++; else r.wrong++;
-      r.index++;
-      r.lastAnswer = lastAnswer;
+    function recordAnswer(holder, isCorrect, lastAnswer) {
+      holder.answered++;
+      if (isCorrect) holder.correct++; else holder.wrong++;
+      holder.index++;
+      holder.lastAnswer = lastAnswer;
       save(state);
       container.querySelector(".top").replaceWith(renderTop());
     }
 
-    function renderChoiceCard(card) {
-      const r = state.round;
-      // Cevaplanmış ama "Sonraki Kart"a basılmamış kart varsa onu sonuçlu göster.
-      const pending = r.lastAnswer;
-      const word = findWord(pending ? pending.en : r.deck[r.index]);
-      const choices = pending ? pending.choices : shuffle([word.tr, wrongOptionFor(word)]); // doğru cevabın yeri rastgele
+    // Ortak şıklı soru kartı (seçmeli tur ve seviye testi).
+    function renderChoiceQuestion(card, { holder, word, pool, extra, onAnswered }) {
+      // Cevaplanmış ama henüz geçilmemiş soru varsa (ör. sayfa yenilendi) onu sonuçlu göster.
+      const pending = holder.lastAnswer;
+      const choices = pending ? pending.choices : optionsFor(word, pool);
 
       card.append(el("div", "word", word.en.toUpperCase()));
 
@@ -588,7 +682,7 @@ const Stage1 = {
       const buttons = choices.map((meaning, i) => {
         const btn = el("button", "option");
         btn.type = "button";
-        btn.append(el("span", "letter", (i === 0 ? "A" : "B") + ")"), meaning);
+        btn.append(el("span", "letter", OPTION_LETTERS[i] + ")"), meaning);
         btn.addEventListener("click", () => answer(meaning));
         options.append(btn);
         return { btn, meaning };
@@ -601,25 +695,50 @@ const Stage1 = {
           if (meaning === word.tr) btn.classList.add("correct");
           else if (meaning === picked) btn.classList.add("wrong");
         });
-        const correctLetter = choices.indexOf(word.tr) === 0 ? "A" : "B";
+        const correctLetter = OPTION_LETTERS[choices.indexOf(word.tr)];
         feedback.className = "feedback " + (isCorrect ? "correct" : "wrong");
         feedback.textContent = isCorrect
           ? "Doğru!"
           : "Yanlış. Doğru cevap: " + correctLetter + ") " + word.tr;
-        autoNext(isCorrect);
+        autoNext(isCorrect, holder);
       }
 
       function answer(picked) {
         const isCorrect = picked === word.tr;
-        if (!isCorrect) state.mistakes.push(word.en);
-        recordAnswer(isCorrect, { en: word.en, choices, picked });
+        onAnswered(isCorrect);
+        recordAnswer(holder, isCorrect, { ...extra, en: word.en, choices, picked });
         showResult(picked);
       }
 
       card.append(options, feedback);
-      const shownIndex = pending ? r.index : r.index + 1;
-      card.append(el("div", "remaining", "Kart " + shownIndex + " / " + r.deck.length));
+      const shownIndex = pending ? holder.index : holder.index + 1;
+      card.append(el("div", "remaining", (inPlacement() ? "Soru " : "Kart ") + shownIndex + " / " + holder.deck.length));
       if (pending) showResult(pending.picked);
+    }
+
+    function renderPlacementCard(card) {
+      const p = state.placement;
+      const item = p.lastAnswer ? { lvl: p.lastAnswer.lvl, en: p.lastAnswer.en } : p.deck[p.index];
+      const pool = LEVELS[item.lvl].words;
+      renderChoiceQuestion(card, {
+        holder: p,
+        word: pool.find(w => w.en === item.en),
+        pool,
+        extra: { lvl: item.lvl },
+        onAnswered: ok => { if (ok && item.lvl === 0) p.a1Correct++; },
+      });
+    }
+
+    function renderChoiceCard(card) {
+      const r = state.round;
+      const word = findWord(r.lastAnswer ? r.lastAnswer.en : r.deck[r.index]);
+      renderChoiceQuestion(card, {
+        holder: r,
+        word,
+        pool: level().words,
+        extra: {},
+        onAnswered: ok => { if (!ok) state.mistakes.push(word.en); },
+      });
     }
 
     function renderWriteCard(card) {
@@ -657,7 +776,7 @@ const Stage1 = {
         feedback.textContent = isCorrect
           ? "Doğru! (" + word.tr + ")"
           : "Yanlış. Doğrusu: " + word.tr + " — bu kelime turun sonunda tekrar gelecek.";
-        autoNext(isCorrect);
+        autoNext(isCorrect, r);
       }
 
       form.addEventListener("submit", event => {
@@ -666,7 +785,7 @@ const Stage1 = {
         if (!typed.trim()) return;
         const isCorrect = normalizeAnswer(typed) === normalizeAnswer(word.tr);
         if (!isCorrect) r.deck.push(word.en); // doğru yazılana kadar tekrar sorulur
-        recordAnswer(isCorrect, { en: word.en, typed });
+        recordAnswer(r, isCorrect, { en: word.en, typed });
         showResult(typed);
       });
 
