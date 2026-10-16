@@ -593,7 +593,9 @@ const Speech = {
     const pick = () => {
       let voices = [];
       try { voices = window.speechSynthesis.getVoices() || []; } catch {}
-      const english = voices.filter(v => /^en([-_]|$)/i.test(v.lang || ""));
+      // Yalnızca cihazın kendi sesleri: localService=false olan sesler (ör. Chrome'un "Google ..." sesleri)
+      // metni internetteki bir sunucuya gönderir, kullanılmaz.
+      const english = voices.filter(v => /^en([-_]|$)/i.test(v.lang || "") && v.localService !== false);
       const voice = english.find(v => /^en[-_]US/i.test(v.lang)) || english[0] || null;
       if (voice) { this.voice = voice; this.setStatus("yes"); }
       return !!voice;
