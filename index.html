@@ -38,6 +38,39 @@
   }
   #app { width: 100%; max-width: 440px; }
 
+  .word-row { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 4px 0 24px; }
+  .word-row .word { margin: 0; }
+  .speak-btn {
+    flex-shrink: 0;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--card);
+    font-size: 18px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .listen-btn { margin: 4px 0 24px; font-size: 20px; padding: 18px; }
+  .sentence-row { display: flex; align-items: center; gap: 10px; margin: 4px 0 8px; }
+  .sentence-text { flex: 1; font-size: 20px; font-weight: 600; line-height: 1.4; text-align: center; }
+  .question { text-align: center; color: var(--muted); margin: 0 0 20px; }
+  .fill-sentence { font-size: 20px; font-weight: 600; line-height: 1.6; text-align: center; margin: 4px 0 22px; }
+  .blank { display: inline-block; min-width: 72px; border-bottom: 2px solid var(--text); }
+  .reveal { text-align: center; font-weight: 700; margin-top: 6px; }
+  .banner {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    background: var(--correct-bg);
+    border: 1px solid var(--correct);
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 12px;
+    font-weight: 600;
+  }
+
   .top-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 12px; }
   .greeting { font-size: 20px; font-weight: 700; margin: 0; word-break: break-word; }
   .link-btn {
@@ -187,225 +220,330 @@ const CHOICE_COUNT = 4;            // seçmeli sorularda şık sayısı (1 doğr
 const PLACEMENT_COUNTS = [8, 7];   // seviye testinde A1 ve A2'den sorulan kelime sayısı (toplam 15)
 const PLACEMENT_PASS = 10;         // testte toplam en az bu kadar doğru → A2'den başla
 const DAILY_WORD_COUNT = 10;       // her gün verilen yeni kelime
-const MIN_SENTENCE_WORDS = 4;      // cümle alıştırmasında en az kelime sayısı
+const UNLOCK_PERCENT = 90;         // kilitli seviye: önceki seviyelerin kelimelerinin bu yüzdesi doğru bilinince açılır
 const PROGRESS_WINDOW_DAYS = 30;   // ilerleme ekranında "son N günde görülen kelime"
 const NAME_MAX_LENGTH = 30;
 
 /* =========================================================================
    2) KELİME LİSTELERİ — her seviyede 100 kelime
-   Bir seviye içinde her Türkçe anlam tektir; yanlış seçenek asla
-   başka bir kartın doğru cevabıyla karışmaz.
+   Her kelimede Türkçe anlam (tr), kısa İngilizce örnek cümle (ex) ve
+   cümlenin Türkçesi (exTr) var. Bir seviye içinde anlamlar ve çeviriler
+   tektir; yanlış şıklar asla başka bir kartın doğru cevabıyla karışmaz.
    ========================================================================= */
 const A1_WORDS = [
-  { en: "breakfast", tr: "Kahvaltı" },
-  { en: "lunch", tr: "Öğle yemeği" },
-  { en: "dinner", tr: "Akşam yemeği" },
-  { en: "apple", tr: "Elma" },
-  { en: "bread", tr: "Ekmek" },
-  { en: "water", tr: "Su" },
-  { en: "milk", tr: "Süt" },
-  { en: "egg", tr: "Yumurta" },
-  { en: "cheese", tr: "Peynir" },
-  { en: "tea", tr: "Çay" },
-  { en: "coffee", tr: "Kahve" },
-  { en: "house", tr: "Ev" },
-  { en: "door", tr: "Kapı" },
-  { en: "window", tr: "Pencere" },
-  { en: "table", tr: "Masa" },
-  { en: "chair", tr: "Sandalye" },
-  { en: "bed", tr: "Yatak" },
-  { en: "kitchen", tr: "Mutfak" },
-  { en: "room", tr: "Oda" },
-  { en: "book", tr: "Kitap" },
-  { en: "pen", tr: "Kalem" },
-  { en: "school", tr: "Okul" },
-  { en: "teacher", tr: "Öğretmen" },
-  { en: "student", tr: "Öğrenci" },
-  { en: "friend", tr: "Arkadaş" },
-  { en: "family", tr: "Aile" },
-  { en: "mother", tr: "Anne" },
-  { en: "father", tr: "Baba" },
-  { en: "sister", tr: "Kız kardeş" },
-  { en: "brother", tr: "Erkek kardeş" },
-  { en: "child", tr: "Çocuk" },
-  { en: "baby", tr: "Bebek" },
-  { en: "man", tr: "Adam" },
-  { en: "woman", tr: "Kadın" },
-  { en: "dog", tr: "Köpek" },
-  { en: "cat", tr: "Kedi" },
-  { en: "bird", tr: "Kuş" },
-  { en: "fish", tr: "Balık" },
-  { en: "horse", tr: "At" },
-  { en: "car", tr: "Araba" },
-  { en: "bus", tr: "Otobüs" },
-  { en: "train", tr: "Tren" },
-  { en: "bicycle", tr: "Bisiklet" },
-  { en: "road", tr: "Yol" },
-  { en: "city", tr: "Şehir" },
-  { en: "country", tr: "Ülke" },
-  { en: "sea", tr: "Deniz" },
-  { en: "sun", tr: "Güneş" },
-  { en: "moon", tr: "Ay" },
-  { en: "star", tr: "Yıldız" },
-  { en: "rain", tr: "Yağmur" },
-  { en: "snow", tr: "Kar" },
-  { en: "tree", tr: "Ağaç" },
-  { en: "flower", tr: "Çiçek" },
-  { en: "day", tr: "Gün" },
-  { en: "night", tr: "Gece" },
-  { en: "morning", tr: "Sabah" },
-  { en: "week", tr: "Hafta" },
-  { en: "year", tr: "Yıl" },
-  { en: "today", tr: "Bugün" },
-  { en: "tomorrow", tr: "Yarın" },
-  { en: "yesterday", tr: "Dün" },
-  { en: "red", tr: "Kırmızı" },
-  { en: "blue", tr: "Mavi" },
-  { en: "green", tr: "Yeşil" },
-  { en: "yellow", tr: "Sarı" },
-  { en: "black", tr: "Siyah" },
-  { en: "white", tr: "Beyaz" },
-  { en: "big", tr: "Büyük" },
-  { en: "small", tr: "Küçük" },
-  { en: "hot", tr: "Sıcak" },
-  { en: "cold", tr: "Soğuk" },
-  { en: "new", tr: "Yeni" },
-  { en: "old", tr: "Eski" },
-  { en: "happy", tr: "Mutlu" },
-  { en: "sad", tr: "Üzgün" },
-  { en: "good", tr: "İyi" },
-  { en: "bad", tr: "Kötü" },
-  { en: "fast", tr: "Hızlı" },
-  { en: "slow", tr: "Yavaş" },
-  { en: "eat", tr: "Yemek yemek" },
-  { en: "drink", tr: "İçmek" },
-  { en: "sleep", tr: "Uyumak" },
-  { en: "read", tr: "Okumak" },
-  { en: "write", tr: "Yazmak" },
-  { en: "run", tr: "Koşmak" },
-  { en: "walk", tr: "Yürümek" },
-  { en: "open", tr: "Açmak" },
-  { en: "close", tr: "Kapatmak" },
-  { en: "buy", tr: "Satın almak" },
-  { en: "sell", tr: "Satmak" },
-  { en: "help", tr: "Yardım etmek" },
-  { en: "hand", tr: "El" },
-  { en: "head", tr: "Baş" },
-  { en: "eye", tr: "Göz" },
-  { en: "ear", tr: "Kulak" },
-  { en: "mouth", tr: "Ağız" },
-  { en: "money", tr: "Para" },
-  { en: "hospital", tr: "Hastane" },
-  { en: "music", tr: "Müzik" },
+  { en: "breakfast", tr: "Kahvaltı", ex: "I eat breakfast at seven.", exTr: "Saat yedide kahvaltı yaparım." },
+  { en: "lunch", tr: "Öğle yemeği", ex: "We have lunch at school.", exTr: "Okulda öğle yemeği yeriz." },
+  { en: "dinner", tr: "Akşam yemeği", ex: "Dinner is ready now.", exTr: "Akşam yemeği şimdi hazır." },
+  { en: "apple", tr: "Elma", ex: "This apple is very sweet.", exTr: "Bu elma çok tatlı." },
+  { en: "bread", tr: "Ekmek", ex: "I buy bread every morning.", exTr: "Her sabah ekmek alırım." },
+  { en: "water", tr: "Su", ex: "Can I have some water?", exTr: "Biraz su alabilir miyim?" },
+  { en: "milk", tr: "Süt", ex: "The baby drinks milk.", exTr: "Bebek süt içer." },
+  { en: "egg", tr: "Yumurta", ex: "I want one egg, please.", exTr: "Bir yumurta istiyorum, lütfen." },
+  { en: "cheese", tr: "Peynir", ex: "She likes white cheese.", exTr: "O beyaz peyniri sever." },
+  { en: "tea", tr: "Çay", ex: "My father drinks black tea.", exTr: "Babam siyah çay içer." },
+  { en: "coffee", tr: "Kahve", ex: "This coffee is too hot.", exTr: "Bu kahve çok sıcak." },
+  { en: "house", tr: "Ev", ex: "Our house is very big.", exTr: "Evimiz çok büyük." },
+  { en: "door", tr: "Kapı", ex: "Please close the door.", exTr: "Lütfen kapıyı kapat." },
+  { en: "window", tr: "Pencere", ex: "Open the window, please.", exTr: "Pencereyi aç, lütfen." },
+  { en: "table", tr: "Masa", ex: "The book is on the table.", exTr: "Kitap masanın üstünde." },
+  { en: "chair", tr: "Sandalye", ex: "This chair is not comfortable.", exTr: "Bu sandalye rahat değil." },
+  { en: "bed", tr: "Yatak", ex: "I go to bed at ten.", exTr: "Saat onda yatağa giderim." },
+  { en: "kitchen", tr: "Mutfak", ex: "Mom is in the kitchen.", exTr: "Annem mutfakta." },
+  { en: "room", tr: "Oda", ex: "My room is small.", exTr: "Odam küçük." },
+  { en: "book", tr: "Kitap", ex: "I read a book every week.", exTr: "Her hafta bir kitap okurum." },
+  { en: "pen", tr: "Kalem", ex: "Can I use your pen?", exTr: "Kalemini kullanabilir miyim?" },
+  { en: "school", tr: "Okul", ex: "The school starts at eight.", exTr: "Okul sekizde başlar." },
+  { en: "teacher", tr: "Öğretmen", ex: "Our teacher is very kind.", exTr: "Öğretmenimiz çok nazik." },
+  { en: "student", tr: "Öğrenci", ex: "He is a good student.", exTr: "O iyi bir öğrenci." },
+  { en: "friend", tr: "Arkadaş", ex: "Ali is my best friend.", exTr: "Ali en iyi arkadaşım." },
+  { en: "family", tr: "Aile", ex: "I love my family.", exTr: "Ailemi seviyorum." },
+  { en: "mother", tr: "Anne", ex: "My mother is a doctor.", exTr: "Annem bir doktor." },
+  { en: "father", tr: "Baba", ex: "My father works in a bank.", exTr: "Babam bir bankada çalışır." },
+  { en: "sister", tr: "Kız kardeş", ex: "My sister is ten years old.", exTr: "Kız kardeşim on yaşında." },
+  { en: "brother", tr: "Erkek kardeş", ex: "My brother plays football.", exTr: "Erkek kardeşim futbol oynar." },
+  { en: "child", tr: "Çocuk", ex: "The child is playing outside.", exTr: "Çocuk dışarıda oynuyor." },
+  { en: "baby", tr: "Bebek", ex: "The baby is sleeping.", exTr: "Bebek uyuyor." },
+  { en: "man", tr: "Adam", ex: "That man is very tall.", exTr: "O adam çok uzun." },
+  { en: "woman", tr: "Kadın", ex: "The woman is reading a newspaper.", exTr: "Kadın gazete okuyor." },
+  { en: "dog", tr: "Köpek", ex: "The dog is in the garden.", exTr: "Köpek bahçede." },
+  { en: "cat", tr: "Kedi", ex: "My cat likes fish.", exTr: "Kedim balığı sever." },
+  { en: "bird", tr: "Kuş", ex: "A bird is singing.", exTr: "Bir kuş şarkı söylüyor." },
+  { en: "fish", tr: "Balık", ex: "We eat fish on Friday.", exTr: "Cuma günü balık yeriz." },
+  { en: "horse", tr: "At", ex: "The horse runs fast.", exTr: "At hızlı koşar." },
+  { en: "car", tr: "Araba", ex: "His car is red.", exTr: "Onun arabası kırmızı." },
+  { en: "bus", tr: "Otobüs", ex: "I go to work by bus.", exTr: "İşe otobüsle giderim." },
+  { en: "train", tr: "Tren", ex: "The train is late today.", exTr: "Tren bugün gecikti." },
+  { en: "bicycle", tr: "Bisiklet", ex: "I ride my bicycle to school.", exTr: "Okula bisikletimle giderim." },
+  { en: "road", tr: "Yol", ex: "This road is very long.", exTr: "Bu yol çok uzun." },
+  { en: "city", tr: "Şehir", ex: "Istanbul is a big city.", exTr: "İstanbul büyük bir şehir." },
+  { en: "country", tr: "Ülke", ex: "Turkey is a beautiful country.", exTr: "Türkiye güzel bir ülke." },
+  { en: "sea", tr: "Deniz", ex: "The sea is blue today.", exTr: "Deniz bugün mavi." },
+  { en: "sun", tr: "Güneş", ex: "The sun is very hot.", exTr: "Güneş çok sıcak." },
+  { en: "moon", tr: "Ay", ex: "The moon is bright tonight.", exTr: "Ay bu gece parlak." },
+  { en: "star", tr: "Yıldız", ex: "I can see a star.", exTr: "Bir yıldız görebiliyorum." },
+  { en: "rain", tr: "Yağmur", ex: "I don't like rain.", exTr: "Yağmuru sevmem." },
+  { en: "snow", tr: "Kar", ex: "There is snow on the mountain.", exTr: "Dağda kar var." },
+  { en: "tree", tr: "Ağaç", ex: "There is a big tree here.", exTr: "Burada büyük bir ağaç var." },
+  { en: "flower", tr: "Çiçek", ex: "This flower smells nice.", exTr: "Bu çiçek güzel kokuyor." },
+  { en: "day", tr: "Gün", ex: "Have a nice day!", exTr: "İyi günler!" },
+  { en: "night", tr: "Gece", ex: "Good night, sleep well.", exTr: "İyi geceler, iyi uykular." },
+  { en: "morning", tr: "Sabah", ex: "I run every morning.", exTr: "Her sabah koşarım." },
+  { en: "week", tr: "Hafta", ex: "I work five days a week.", exTr: "Haftada beş gün çalışırım." },
+  { en: "year", tr: "Yıl", ex: "This year is very good.", exTr: "Bu yıl çok iyi." },
+  { en: "today", tr: "Bugün", ex: "Today is Monday.", exTr: "Bugün pazartesi." },
+  { en: "tomorrow", tr: "Yarın", ex: "See you tomorrow!", exTr: "Yarın görüşürüz!" },
+  { en: "yesterday", tr: "Dün", ex: "I was at home yesterday.", exTr: "Dün evdeydim." },
+  { en: "red", tr: "Kırmızı", ex: "I have a red bag.", exTr: "Kırmızı bir çantam var." },
+  { en: "blue", tr: "Mavi", ex: "The sky is blue.", exTr: "Gökyüzü mavi." },
+  { en: "green", tr: "Yeşil", ex: "I like green apples.", exTr: "Yeşil elmaları severim." },
+  { en: "yellow", tr: "Sarı", ex: "The taxi is yellow.", exTr: "Taksi sarı." },
+  { en: "black", tr: "Siyah", ex: "She has a black cat.", exTr: "Onun siyah bir kedisi var." },
+  { en: "white", tr: "Beyaz", ex: "The wall is white.", exTr: "Duvar beyaz." },
+  { en: "big", tr: "Büyük", ex: "We have a big garden.", exTr: "Büyük bir bahçemiz var." },
+  { en: "small", tr: "Küçük", ex: "This shirt is too small.", exTr: "Bu gömlek çok küçük." },
+  { en: "hot", tr: "Sıcak", ex: "It is very hot today.", exTr: "Bugün hava çok sıcak." },
+  { en: "cold", tr: "Soğuk", ex: "The water is cold.", exTr: "Su soğuk." },
+  { en: "new", tr: "Yeni", ex: "I have a new phone.", exTr: "Yeni bir telefonum var." },
+  { en: "old", tr: "Eski", ex: "This is an old house.", exTr: "Bu eski bir ev." },
+  { en: "happy", tr: "Mutlu", ex: "I am very happy today.", exTr: "Bugün çok mutluyum." },
+  { en: "sad", tr: "Üzgün", ex: "Why are you sad?", exTr: "Neden üzgünsün?" },
+  { en: "good", tr: "İyi", ex: "This is a good idea.", exTr: "Bu iyi bir fikir." },
+  { en: "bad", tr: "Kötü", ex: "The weather is bad today.", exTr: "Bugün hava kötü." },
+  { en: "fast", tr: "Hızlı", ex: "This car is very fast.", exTr: "Bu araba çok hızlı." },
+  { en: "slow", tr: "Yavaş", ex: "The old bus is slow.", exTr: "Eski otobüs yavaş." },
+  { en: "eat", tr: "Yemek yemek", ex: "Let's eat together.", exTr: "Hadi birlikte yiyelim." },
+  { en: "drink", tr: "İçmek", ex: "Drink some water.", exTr: "Biraz su iç." },
+  { en: "sleep", tr: "Uyumak", ex: "I sleep eight hours.", exTr: "Sekiz saat uyurum." },
+  { en: "read", tr: "Okumak", ex: "I read the news every day.", exTr: "Her gün haberleri okurum." },
+  { en: "write", tr: "Yazmak", ex: "Please write your name.", exTr: "Lütfen adını yaz." },
+  { en: "run", tr: "Koşmak", ex: "I run in the park.", exTr: "Parkta koşarım." },
+  { en: "walk", tr: "Yürümek", ex: "We walk to school.", exTr: "Okula yürürüz." },
+  { en: "open", tr: "Açmak", ex: "Open your books, please.", exTr: "Kitaplarınızı açın, lütfen." },
+  { en: "close", tr: "Kapatmak", ex: "Close your eyes.", exTr: "Gözlerini kapat." },
+  { en: "buy", tr: "Satın almak", ex: "I want to buy a car.", exTr: "Bir araba almak istiyorum." },
+  { en: "sell", tr: "Satmak", ex: "They sell fresh fruit.", exTr: "Taze meyve satıyorlar." },
+  { en: "help", tr: "Yardım etmek", ex: "Can you help me, please?", exTr: "Bana yardım edebilir misin, lütfen?" },
+  { en: "hand", tr: "El", ex: "Give me your hand, please.", exTr: "Elini bana ver, lütfen." },
+  { en: "head", tr: "Baş", ex: "My head hurts.", exTr: "Başım ağrıyor." },
+  { en: "eye", tr: "Göz", ex: "I have something in my eye.", exTr: "Gözüme bir şey kaçtı." },
+  { en: "ear", tr: "Kulak", ex: "My ear hurts.", exTr: "Kulağım ağrıyor." },
+  { en: "mouth", tr: "Ağız", ex: "Open your mouth, please.", exTr: "Ağzını aç, lütfen." },
+  { en: "money", tr: "Para", ex: "I have no money.", exTr: "Hiç param yok." },
+  { en: "hospital", tr: "Hastane", ex: "My friend is in the hospital.", exTr: "Arkadaşım hastanede." },
+  { en: "music", tr: "Müzik", ex: "I listen to music every day.", exTr: "Her gün müzik dinlerim." },
 ];
 
 const A2_WORDS = [
-  { en: "airport", tr: "Havalimanı" },
-  { en: "ticket", tr: "Bilet" },
-  { en: "journey", tr: "Yolculuk" },
-  { en: "holiday", tr: "Tatil" },
-  { en: "weather", tr: "Hava durumu" },
-  { en: "cloud", tr: "Bulut" },
-  { en: "wind", tr: "Rüzgar" },
-  { en: "river", tr: "Nehir" },
-  { en: "mountain", tr: "Dağ" },
-  { en: "island", tr: "Ada" },
-  { en: "village", tr: "Köy" },
-  { en: "bridge", tr: "Köprü" },
-  { en: "building", tr: "Bina" },
-  { en: "library", tr: "Kütüphane" },
-  { en: "museum", tr: "Müze" },
-  { en: "market", tr: "Pazar" },
-  { en: "price", tr: "Fiyat" },
-  { en: "cheap", tr: "Ucuz" },
-  { en: "expensive", tr: "Pahalı" },
-  { en: "wallet", tr: "Cüzdan" },
-  { en: "job", tr: "İş" },
-  { en: "office", tr: "Ofis" },
-  { en: "manager", tr: "Müdür" },
-  { en: "meeting", tr: "Toplantı" },
-  { en: "salary", tr: "Maaş" },
-  { en: "neighbour", tr: "Komşu" },
-  { en: "guest", tr: "Misafir" },
-  { en: "wedding", tr: "Düğün" },
-  { en: "birthday", tr: "Doğum günü" },
-  { en: "gift", tr: "Hediye" },
-  { en: "health", tr: "Sağlık" },
-  { en: "medicine", tr: "İlaç" },
-  { en: "pain", tr: "Ağrı" },
-  { en: "fever", tr: "Ateş" },
-  { en: "dentist", tr: "Diş hekimi" },
-  { en: "vegetable", tr: "Sebze" },
-  { en: "fruit", tr: "Meyve" },
-  { en: "meat", tr: "Et" },
-  { en: "rice", tr: "Pirinç" },
-  { en: "soup", tr: "Çorba" },
-  { en: "salt", tr: "Tuz" },
-  { en: "sugar", tr: "Şeker" },
-  { en: "knife", tr: "Bıçak" },
-  { en: "spoon", tr: "Kaşık" },
-  { en: "fork", tr: "Çatal" },
-  { en: "plate", tr: "Tabak" },
-  { en: "glass", tr: "Bardak" },
-  { en: "clothes", tr: "Kıyafet" },
-  { en: "shoe", tr: "Ayakkabı" },
-  { en: "jacket", tr: "Ceket" },
-  { en: "hat", tr: "Şapka" },
-  { en: "mirror", tr: "Ayna" },
-  { en: "key", tr: "Anahtar" },
-  { en: "garden", tr: "Bahçe" },
-  { en: "wall", tr: "Duvar" },
-  { en: "roof", tr: "Çatı" },
-  { en: "stairs", tr: "Merdiven" },
-  { en: "noise", tr: "Gürültü" },
-  { en: "idea", tr: "Fikir" },
-  { en: "question", tr: "Soru" },
-  { en: "answer", tr: "Cevap" },
-  { en: "mistake", tr: "Hata" },
-  { en: "dream", tr: "Rüya" },
-  { en: "memory", tr: "Anı" },
-  { en: "future", tr: "Gelecek" },
-  { en: "past", tr: "Geçmiş" },
-  { en: "century", tr: "Yüzyıl" },
-  { en: "minute", tr: "Dakika" },
-  { en: "early", tr: "Erken" },
-  { en: "late", tr: "Geç" },
-  { en: "quiet", tr: "Sessiz" },
-  { en: "dangerous", tr: "Tehlikeli" },
-  { en: "safe", tr: "Güvenli" },
-  { en: "empty", tr: "Boş" },
-  { en: "full", tr: "Dolu" },
-  { en: "heavy", tr: "Ağır" },
-  { en: "easy", tr: "Kolay" },
-  { en: "difficult", tr: "Zor" },
-  { en: "strong", tr: "Güçlü" },
-  { en: "weak", tr: "Zayıf" },
-  { en: "rich", tr: "Zengin" },
-  { en: "poor", tr: "Fakir" },
-  { en: "clean", tr: "Temiz" },
-  { en: "dirty", tr: "Kirli" },
-  { en: "wet", tr: "Islak" },
-  { en: "dry", tr: "Kuru" },
-  { en: "tired", tr: "Yorgun" },
-  { en: "angry", tr: "Kızgın" },
-  { en: "worried", tr: "Endişeli" },
-  { en: "brave", tr: "Cesur" },
-  { en: "polite", tr: "Kibar" },
-  { en: "remember", tr: "Hatırlamak" },
-  { en: "forget", tr: "Unutmak" },
-  { en: "borrow", tr: "Ödünç almak" },
-  { en: "lend", tr: "Ödünç vermek" },
-  { en: "arrive", tr: "Varmak" },
-  { en: "invite", tr: "Davet etmek" },
-  { en: "explain", tr: "Açıklamak" },
-  { en: "choose", tr: "Seçmek" },
-  { en: "wait", tr: "Beklemek" },
+  { en: "airport", tr: "Havalimanı", ex: "We are at the airport now.", exTr: "Şu an havalimanındayız." },
+  { en: "ticket", tr: "Bilet", ex: "I have a ticket for the concert.", exTr: "Konser için bir biletim var." },
+  { en: "journey", tr: "Yolculuk", ex: "The journey took five hours.", exTr: "Yolculuk beş saat sürdü." },
+  { en: "holiday", tr: "Tatil", ex: "We go on holiday in July.", exTr: "Temmuzda tatile gideriz." },
+  { en: "weather", tr: "Hava durumu", ex: "The weather is nice today.", exTr: "Bugün hava güzel." },
+  { en: "cloud", tr: "Bulut", ex: "There is a dark cloud in the sky.", exTr: "Gökyüzünde kara bir bulut var." },
+  { en: "wind", tr: "Rüzgar", ex: "The wind is very strong today.", exTr: "Bugün rüzgar çok sert." },
+  { en: "river", tr: "Nehir", ex: "The river is very long.", exTr: "Nehir çok uzun." },
+  { en: "mountain", tr: "Dağ", ex: "We climbed a high mountain.", exTr: "Yüksek bir dağa tırmandık." },
+  { en: "island", tr: "Ada", ex: "They live on a small island.", exTr: "Küçük bir adada yaşıyorlar." },
+  { en: "village", tr: "Köy", ex: "My grandmother lives in a village.", exTr: "Büyükannem bir köyde yaşıyor." },
+  { en: "bridge", tr: "Köprü", ex: "We walked across the bridge.", exTr: "Köprünün üzerinden yürüdük." },
+  { en: "building", tr: "Bina", ex: "That building is very old.", exTr: "O bina çok eski." },
+  { en: "library", tr: "Kütüphane", ex: "I study in the library.", exTr: "Kütüphanede ders çalışırım." },
+  { en: "museum", tr: "Müze", ex: "The museum opens at nine.", exTr: "Müze dokuzda açılır." },
+  { en: "market", tr: "Pazar", ex: "I buy vegetables at the market.", exTr: "Sebzeleri pazardan alırım." },
+  { en: "price", tr: "Fiyat", ex: "What is the price of this bag?", exTr: "Bu çantanın fiyatı ne?" },
+  { en: "cheap", tr: "Ucuz", ex: "These shoes are very cheap.", exTr: "Bu ayakkabılar çok ucuz." },
+  { en: "expensive", tr: "Pahalı", ex: "This hotel is too expensive.", exTr: "Bu otel çok pahalı." },
+  { en: "wallet", tr: "Cüzdan", ex: "I lost my wallet.", exTr: "Cüzdanımı kaybettim." },
+  { en: "job", tr: "İş", ex: "She has a new job.", exTr: "Onun yeni bir işi var." },
+  { en: "office", tr: "Ofis", ex: "He works in an office.", exTr: "O bir ofiste çalışıyor." },
+  { en: "manager", tr: "Müdür", ex: "I want to talk to the manager.", exTr: "Müdürle konuşmak istiyorum." },
+  { en: "meeting", tr: "Toplantı", ex: "The meeting starts at ten.", exTr: "Toplantı onda başlıyor." },
+  { en: "salary", tr: "Maaş", ex: "His salary is very good.", exTr: "Onun maaşı çok iyi." },
+  { en: "neighbour", tr: "Komşu", ex: "Our neighbour is very friendly.", exTr: "Komşumuz çok cana yakın." },
+  { en: "guest", tr: "Misafir", ex: "We have a guest tonight.", exTr: "Bu akşam misafirimiz var." },
+  { en: "wedding", tr: "Düğün", ex: "Their wedding is in June.", exTr: "Düğünleri haziranda." },
+  { en: "birthday", tr: "Doğum günü", ex: "Today is my birthday.", exTr: "Bugün benim doğum günüm." },
+  { en: "gift", tr: "Hediye", ex: "Thank you for the gift.", exTr: "Hediye için teşekkürler." },
+  { en: "health", tr: "Sağlık", ex: "Health is very important.", exTr: "Sağlık çok önemlidir." },
+  { en: "medicine", tr: "İlaç", ex: "Take this medicine twice a day.", exTr: "Bu ilacı günde iki kez al." },
+  { en: "pain", tr: "Ağrı", ex: "I have a pain in my back.", exTr: "Sırtımda bir ağrı var." },
+  { en: "fever", tr: "Ateş", ex: "The child has a high fever.", exTr: "Çocuğun yüksek ateşi var." },
+  { en: "dentist", tr: "Diş hekimi", ex: "I see the dentist every year.", exTr: "Her yıl diş hekimine giderim." },
+  { en: "vegetable", tr: "Sebze", ex: "A carrot is a vegetable.", exTr: "Havuç bir sebzedir." },
+  { en: "fruit", tr: "Meyve", ex: "I eat fruit after dinner.", exTr: "Akşam yemeğinden sonra meyve yerim." },
+  { en: "meat", tr: "Et", ex: "I don't eat meat.", exTr: "Et yemem." },
+  { en: "rice", tr: "Pirinç", ex: "We cooked rice and chicken.", exTr: "Pilav ve tavuk pişirdik." },
+  { en: "soup", tr: "Çorba", ex: "This soup is delicious.", exTr: "Bu çorba çok lezzetli." },
+  { en: "salt", tr: "Tuz", ex: "Can you pass the salt?", exTr: "Tuzu uzatır mısın?" },
+  { en: "sugar", tr: "Şeker", ex: "I drink tea without sugar.", exTr: "Çayı şekersiz içerim." },
+  { en: "knife", tr: "Bıçak", ex: "Be careful with that knife.", exTr: "O bıçağa dikkat et." },
+  { en: "spoon", tr: "Kaşık", ex: "I need a spoon for my soup.", exTr: "Çorbam için bir kaşığa ihtiyacım var." },
+  { en: "fork", tr: "Çatal", ex: "There is no fork on the table.", exTr: "Masada çatal yok." },
+  { en: "plate", tr: "Tabak", ex: "Put the plate on the table.", exTr: "Tabağı masaya koy." },
+  { en: "glass", tr: "Bardak", ex: "Can I have a glass of water?", exTr: "Bir bardak su alabilir miyim?" },
+  { en: "clothes", tr: "Kıyafet", ex: "I need new clothes.", exTr: "Yeni kıyafetlere ihtiyacım var." },
+  { en: "shoe", tr: "Ayakkabı", ex: "I can't find my left shoe.", exTr: "Sol ayakkabımı bulamıyorum." },
+  { en: "jacket", tr: "Ceket", ex: "Take your jacket, it's cold.", exTr: "Ceketini al, hava soğuk." },
+  { en: "hat", tr: "Şapka", ex: "He always wears a hat.", exTr: "O her zaman şapka takar." },
+  { en: "mirror", tr: "Ayna", ex: "She is looking in the mirror.", exTr: "Aynaya bakıyor." },
+  { en: "key", tr: "Anahtar", ex: "Where is the car key?", exTr: "Arabanın anahtarı nerede?" },
+  { en: "garden", tr: "Bahçe", ex: "The children are playing in the garden.", exTr: "Çocuklar bahçede oynuyor." },
+  { en: "wall", tr: "Duvar", ex: "There is a picture on the wall.", exTr: "Duvarda bir resim var." },
+  { en: "roof", tr: "Çatı", ex: "There is a cat on the roof.", exTr: "Çatıda bir kedi var." },
+  { en: "stairs", tr: "Merdiven", ex: "Take the stairs to the second floor.", exTr: "İkinci kata merdivenle çık." },
+  { en: "noise", tr: "Gürültü", ex: "Please stop that noise.", exTr: "Lütfen o gürültüyü kes." },
+  { en: "idea", tr: "Fikir", ex: "That's a great idea!", exTr: "Bu harika bir fikir!" },
+  { en: "question", tr: "Soru", ex: "Can I ask a question?", exTr: "Bir soru sorabilir miyim?" },
+  { en: "answer", tr: "Cevap", ex: "I know the answer.", exTr: "Cevabı biliyorum." },
+  { en: "mistake", tr: "Hata", ex: "I made a big mistake.", exTr: "Büyük bir hata yaptım." },
+  { en: "dream", tr: "Rüya", ex: "I had a strange dream last night.", exTr: "Dün gece garip bir rüya gördüm." },
+  { en: "memory", tr: "Anı", ex: "This photo brings back a happy memory.", exTr: "Bu fotoğraf mutlu bir anıyı hatırlatıyor." },
+  { en: "future", tr: "Gelecek", ex: "I want to be a doctor in the future.", exTr: "Gelecekte doktor olmak istiyorum." },
+  { en: "past", tr: "Geçmiş", ex: "Don't think about the past.", exTr: "Geçmişi düşünme." },
+  { en: "century", tr: "Yüzyıl", ex: "This house is from the last century.", exTr: "Bu ev geçen yüzyıldan kalma." },
+  { en: "minute", tr: "Dakika", ex: "Wait a minute, please.", exTr: "Bir dakika bekle, lütfen." },
+  { en: "early", tr: "Erken", ex: "I get up early every day.", exTr: "Her gün erken kalkarım." },
+  { en: "late", tr: "Geç", ex: "Sorry, I am late.", exTr: "Üzgünüm, geç kaldım." },
+  { en: "quiet", tr: "Sessiz", ex: "Please be quiet in the library.", exTr: "Kütüphanede lütfen sessiz ol." },
+  { en: "dangerous", tr: "Tehlikeli", ex: "This road is dangerous at night.", exTr: "Bu yol geceleri tehlikeli." },
+  { en: "safe", tr: "Güvenli", ex: "This city is very safe.", exTr: "Bu şehir çok güvenli." },
+  { en: "empty", tr: "Boş", ex: "The fridge is empty.", exTr: "Buzdolabı boş." },
+  { en: "full", tr: "Dolu", ex: "The bus is full today.", exTr: "Otobüs bugün dolu." },
+  { en: "heavy", tr: "Ağır", ex: "This bag is too heavy.", exTr: "Bu çanta çok ağır." },
+  { en: "easy", tr: "Kolay", ex: "This exercise is easy.", exTr: "Bu alıştırma kolay." },
+  { en: "difficult", tr: "Zor", ex: "The exam was difficult.", exTr: "Sınav zordu." },
+  { en: "strong", tr: "Güçlü", ex: "He is very strong.", exTr: "O çok güçlü." },
+  { en: "weak", tr: "Zayıf", ex: "I feel weak today.", exTr: "Bugün kendimi halsiz hissediyorum." },
+  { en: "rich", tr: "Zengin", ex: "He wants to be rich.", exTr: "Zengin olmak istiyor." },
+  { en: "poor", tr: "Fakir", ex: "They were very poor.", exTr: "Çok fakirlerdi." },
+  { en: "clean", tr: "Temiz", ex: "My room is clean now.", exTr: "Odam artık temiz." },
+  { en: "dirty", tr: "Kirli", ex: "Your shoes are dirty.", exTr: "Ayakkabıların kirli." },
+  { en: "wet", tr: "Islak", ex: "My hair is wet.", exTr: "Saçım ıslak." },
+  { en: "dry", tr: "Kuru", ex: "The clothes are dry now.", exTr: "Kıyafetler artık kuru." },
+  { en: "tired", tr: "Yorgun", ex: "I am very tired today.", exTr: "Bugün çok yorgunum." },
+  { en: "angry", tr: "Kızgın", ex: "Why is she angry?", exTr: "O neden kızgın?" },
+  { en: "worried", tr: "Endişeli", ex: "I am worried about the exam.", exTr: "Sınav için endişeliyim." },
+  { en: "brave", tr: "Cesur", ex: "The little girl was very brave.", exTr: "Küçük kız çok cesurdu." },
+  { en: "polite", tr: "Kibar", ex: "Please be polite to everyone.", exTr: "Lütfen herkese karşı kibar ol." },
+  { en: "remember", tr: "Hatırlamak", ex: "I can't remember his name.", exTr: "Onun adını hatırlayamıyorum." },
+  { en: "forget", tr: "Unutmak", ex: "Don't forget your umbrella.", exTr: "Şemsiyeni unutma." },
+  { en: "borrow", tr: "Ödünç almak", ex: "Can I borrow your pen?", exTr: "Kalemini ödünç alabilir miyim?" },
+  { en: "lend", tr: "Ödünç vermek", ex: "Can you lend me some money?", exTr: "Bana biraz borç para verebilir misin?" },
+  { en: "arrive", tr: "Varmak", ex: "When does the train arrive?", exTr: "Tren ne zaman varıyor?" },
+  { en: "invite", tr: "Davet etmek", ex: "I want to invite you to dinner.", exTr: "Seni akşam yemeğine davet etmek istiyorum." },
+  { en: "explain", tr: "Açıklamak", ex: "Can you explain this word?", exTr: "Bu kelimeyi açıklayabilir misin?" },
+  { en: "choose", tr: "Seçmek", ex: "Choose one color.", exTr: "Bir renk seç." },
+  { en: "wait", tr: "Beklemek", ex: "Please wait here.", exTr: "Lütfen burada bekle." },
 ];
 
-// Seviyeler sırayla ilerler. Yeni seviye eklemek = bu listeye bir satır.
+const B1_WORDS = [
+  { en: "achieve", tr: "Başarmak", ex: "You can achieve your dreams.", exTr: "Hayallerine ulaşabilirsin." },
+  { en: "advice", tr: "Tavsiye", ex: "Can you give me some advice?", exTr: "Bana biraz tavsiye verebilir misin?" },
+  { en: "afford", tr: "Gücü yetmek", ex: "I can't afford a new car.", exTr: "Yeni bir arabaya gücüm yetmez." },
+  { en: "allow", tr: "İzin vermek", ex: "My parents allow me to travel.", exTr: "Ailem seyahat etmeme izin veriyor." },
+  { en: "announce", tr: "Duyurmak", ex: "They will announce the results tomorrow.", exTr: "Sonuçları yarın duyuracaklar." },
+  { en: "apologize", tr: "Özür dilemek", ex: "You should apologize to her.", exTr: "Ondan özür dilemelisin." },
+  { en: "appointment", tr: "Randevu", ex: "I have an appointment at three.", exTr: "Saat üçte bir randevum var." },
+  { en: "argue", tr: "Tartışmak", ex: "They often argue about money.", exTr: "Sık sık para konusunda tartışırlar." },
+  { en: "attitude", tr: "Tutum", ex: "She has a positive attitude.", exTr: "Olumlu bir tutumu var." },
+  { en: "audience", tr: "Seyirci", ex: "The audience loved the show.", exTr: "Seyirciler gösteriyi çok sevdi." },
+  { en: "avoid", tr: "Kaçınmak", ex: "Try to avoid sugar.", exTr: "Şekerden kaçınmaya çalış." },
+  { en: "behave", tr: "Davranmak", ex: "Please behave yourself in class.", exTr: "Lütfen sınıfta uslu dur." },
+  { en: "believe", tr: "İnanmak", ex: "I believe you.", exTr: "Sana inanıyorum." },
+  { en: "benefit", tr: "Fayda", ex: "What is the benefit of this plan?", exTr: "Bu planın faydası ne?" },
+  { en: "career", tr: "Kariyer", ex: "He wants a career in science.", exTr: "Bilimde kariyer yapmak istiyor." },
+  { en: "celebrate", tr: "Kutlamak", ex: "We celebrate New Year together.", exTr: "Yeni yılı birlikte kutlarız." },
+  { en: "challenge", tr: "Zorluk", ex: "This job is a real challenge.", exTr: "Bu iş gerçek bir zorluk." },
+  { en: "compare", tr: "Karşılaştırmak", ex: "Compare these two prices.", exTr: "Bu iki fiyatı karşılaştır." },
+  { en: "complain", tr: "Şikayet etmek", ex: "Don't complain about the weather.", exTr: "Hava hakkında şikayet etme." },
+  { en: "confident", tr: "Kendinden emin", ex: "She feels confident before the exam.", exTr: "Sınavdan önce kendinden emin hissediyor." },
+  { en: "connection", tr: "Bağlantı", ex: "The internet connection is slow.", exTr: "İnternet bağlantısı yavaş." },
+  { en: "contain", tr: "İçermek", ex: "Does this soup contain meat?", exTr: "Bu çorba et içeriyor mu?" },
+  { en: "convince", tr: "İkna etmek", ex: "I couldn't convince him.", exTr: "Onu ikna edemedim." },
+  { en: "culture", tr: "Kültür", ex: "I love Japanese culture.", exTr: "Japon kültürünü seviyorum." },
+  { en: "customer", tr: "Müşteri", ex: "The customer is always right.", exTr: "Müşteri her zaman haklıdır." },
+  { en: "damage", tr: "Hasar", ex: "The storm caused a lot of damage.", exTr: "Fırtına çok hasara yol açtı." },
+  { en: "decision", tr: "Karar", ex: "It was a difficult decision.", exTr: "Zor bir karardı." },
+  { en: "deliver", tr: "Teslim etmek", ex: "They deliver food at night.", exTr: "Geceleri yemek teslim ediyorlar." },
+  { en: "depend", tr: "Bağlı olmak", ex: "Our plans depend on the weather.", exTr: "Planlarımız havaya bağlı." },
+  { en: "design", tr: "Tasarlamak", ex: "I want to design my own house.", exTr: "Kendi evimi tasarlamak istiyorum." },
+  { en: "disappointed", tr: "Hayal kırıklığına uğramış", ex: "I was disappointed with the film.", exTr: "Filmden hayal kırıklığına uğradım." },
+  { en: "discover", tr: "Keşfetmek", ex: "Scientists discover new things every day.", exTr: "Bilim insanları her gün yeni şeyler keşfeder." },
+  { en: "education", tr: "Eğitim", ex: "Education is important for children.", exTr: "Eğitim çocuklar için önemlidir." },
+  { en: "effort", tr: "Çaba", ex: "Learning a language takes effort.", exTr: "Dil öğrenmek çaba ister." },
+  { en: "emergency", tr: "Acil durum", ex: "Call this number in an emergency.", exTr: "Acil bir durumda bu numarayı ara." },
+  { en: "encourage", tr: "Cesaretlendirmek", ex: "Parents should encourage their children.", exTr: "Ebeveynler çocuklarını cesaretlendirmeli." },
+  { en: "environment", tr: "Çevre", ex: "We must protect the environment.", exTr: "Çevreyi korumalıyız." },
+  { en: "equipment", tr: "Ekipman", ex: "The gym has new equipment.", exTr: "Spor salonunda yeni ekipman var." },
+  { en: "event", tr: "Etkinlik", ex: "The event starts at seven.", exTr: "Etkinlik yedide başlıyor." },
+  { en: "experience", tr: "Deneyim", ex: "She has a lot of experience.", exTr: "Çok deneyimi var." },
+  { en: "fail", tr: "Başarısız olmak", ex: "Don't be afraid to fail.", exTr: "Başarısız olmaktan korkma." },
+  { en: "familiar", tr: "Tanıdık", ex: "Your face looks familiar.", exTr: "Yüzün tanıdık geliyor." },
+  { en: "fear", tr: "Korku", ex: "He has a fear of dogs.", exTr: "Köpeklerden korkusu var." },
+  { en: "forgive", tr: "Affetmek", ex: "Please forgive me.", exTr: "Lütfen beni affet." },
+  { en: "frightened", tr: "Korkmuş", ex: "The child was frightened.", exTr: "Çocuk korkmuştu." },
+  { en: "generous", tr: "Cömert", ex: "My uncle is very generous.", exTr: "Amcam çok cömerttir." },
+  { en: "goal", tr: "Hedef", ex: "My goal is to learn English.", exTr: "Hedefim İngilizce öğrenmek." },
+  { en: "government", tr: "Hükümet", ex: "The government built a new hospital.", exTr: "Hükümet yeni bir hastane inşa etti." },
+  { en: "grateful", tr: "Minnettar", ex: "I am grateful for your help.", exTr: "Yardımın için minnettarım." },
+  { en: "habit", tr: "Alışkanlık", ex: "Reading is a good habit.", exTr: "Okumak iyi bir alışkanlıktır." },
+  { en: "honest", tr: "Dürüst", ex: "He is an honest man.", exTr: "O dürüst bir adam." },
+  { en: "improve", tr: "Geliştirmek", ex: "I want to improve my English.", exTr: "İngilizcemi geliştirmek istiyorum." },
+  { en: "independent", tr: "Bağımsız", ex: "She is an independent woman.", exTr: "O bağımsız bir kadın." },
+  { en: "influence", tr: "Etki", ex: "Social media has a big influence.", exTr: "Sosyal medyanın büyük bir etkisi var." },
+  { en: "injury", tr: "Yaralanma", ex: "He had a knee injury.", exTr: "Dizinden yaralandı." },
+  { en: "interview", tr: "Mülakat", ex: "I have a job interview tomorrow.", exTr: "Yarın bir iş mülakatım var." },
+  { en: "invent", tr: "İcat etmek", ex: "I want to invent a new machine.", exTr: "Yeni bir makine icat etmek istiyorum." },
+  { en: "journalist", tr: "Gazeteci", ex: "My cousin is a journalist.", exTr: "Kuzenim bir gazeteci." },
+  { en: "knowledge", tr: "Bilgi", ex: "Knowledge is power.", exTr: "Bilgi güçtür." },
+  { en: "lazy", tr: "Tembel", ex: "Don't be lazy today.", exTr: "Bugün tembellik yapma." },
+  { en: "manage", tr: "Yönetmek", ex: "She can manage the whole team.", exTr: "Bütün ekibi yönetebilir." },
+  { en: "mention", tr: "Bahsetmek", ex: "He didn't mention the problem.", exTr: "Sorundan bahsetmedi." },
+  { en: "nervous", tr: "Gergin", ex: "I always get nervous before exams.", exTr: "Sınavlardan önce hep gerilirim." },
+  { en: "opinion", tr: "Görüş", ex: "What is your opinion?", exTr: "Senin görüşün ne?" },
+  { en: "opportunity", tr: "Fırsat", ex: "This is a great opportunity.", exTr: "Bu harika bir fırsat." },
+  { en: "patient", tr: "Sabırlı", ex: "Be patient with children.", exTr: "Çocuklara karşı sabırlı ol." },
+  { en: "pollution", tr: "Kirlilik", ex: "Air pollution is a big problem.", exTr: "Hava kirliliği büyük bir sorun." },
+  { en: "prefer", tr: "Tercih etmek", ex: "I prefer tea to coffee.", exTr: "Çayı kahveye tercih ederim." },
+  { en: "prepare", tr: "Hazırlamak", ex: "I need to prepare for the exam.", exTr: "Sınava hazırlanmam gerekiyor." },
+  { en: "protect", tr: "Korumak", ex: "Sunglasses protect your eyes.", exTr: "Güneş gözlükleri gözlerini korur." },
+  { en: "proud", tr: "Gururlu", ex: "I am proud of you.", exTr: "Seninle gurur duyuyorum." },
+  { en: "purpose", tr: "Amaç", ex: "What is the purpose of this trip?", exTr: "Bu yolculuğun amacı ne?" },
+  { en: "recommend", tr: "Önermek", ex: "Can you recommend a good book?", exTr: "İyi bir kitap önerebilir misin?" },
+  { en: "reduce", tr: "Azaltmak", ex: "We need to reduce waste.", exTr: "Atıkları azaltmamız gerek." },
+  { en: "refuse", tr: "Reddetmek", ex: "I refuse to give up.", exTr: "Pes etmeyi reddediyorum." },
+  { en: "regret", tr: "Pişman olmak", ex: "I regret my decision.", exTr: "Kararımdan pişmanım." },
+  { en: "relationship", tr: "İlişki", ex: "They have a good relationship.", exTr: "İyi bir ilişkileri var." },
+  { en: "reliable", tr: "Güvenilir", ex: "This car is very reliable.", exTr: "Bu araba çok güvenilir." },
+  { en: "replace", tr: "Değiştirmek", ex: "We need to replace the old window.", exTr: "Eski pencereyi değiştirmemiz gerek." },
+  { en: "research", tr: "Araştırma", ex: "She does research on cancer.", exTr: "Kanser üzerine araştırma yapıyor." },
+  { en: "responsible", tr: "Sorumlu", ex: "Who is responsible for this?", exTr: "Bundan kim sorumlu?" },
+  { en: "result", tr: "Sonuç", ex: "The result of the test was good.", exTr: "Testin sonucu iyiydi." },
+  { en: "rule", tr: "Kural", ex: "This is an important rule.", exTr: "Bu önemli bir kural." },
+  { en: "satisfied", tr: "Memnun", ex: "Are you satisfied with your room?", exTr: "Odandan memnun musun?" },
+  { en: "schedule", tr: "Program", ex: "My schedule is very busy.", exTr: "Programım çok yoğun." },
+  { en: "secret", tr: "Sır", ex: "Can you keep a secret?", exTr: "Sır tutabilir misin?" },
+  { en: "silence", tr: "Sessizlik", ex: "There was a long silence.", exTr: "Uzun bir sessizlik oldu." },
+  { en: "skill", tr: "Beceri", ex: "Cooking is a useful skill.", exTr: "Yemek yapmak faydalı bir beceridir." },
+  { en: "solution", tr: "Çözüm", ex: "We found a solution.", exTr: "Bir çözüm bulduk." },
+  { en: "spend", tr: "Harcamak", ex: "Don't spend all your money.", exTr: "Bütün paranı harcama." },
+  { en: "success", tr: "Başarı", ex: "Hard work brings success.", exTr: "Sıkı çalışma başarı getirir." },
+  { en: "support", tr: "Desteklemek", ex: "I always support my friends.", exTr: "Arkadaşlarımı her zaman desteklerim." },
+  { en: "surprised", tr: "Şaşırmış", ex: "I was surprised by the news.", exTr: "Habere şaşırdım." },
+  { en: "traffic", tr: "Trafik", ex: "There is a lot of traffic today.", exTr: "Bugün çok trafik var." },
+  { en: "translate", tr: "Çevirmek", ex: "Can you translate this letter?", exTr: "Bu mektubu çevirebilir misin?" },
+  { en: "trust", tr: "Güvenmek", ex: "I trust my friends.", exTr: "Arkadaşlarıma güvenirim." },
+  { en: "valuable", tr: "Değerli", ex: "This ring is very valuable.", exTr: "Bu yüzük çok değerli." },
+  { en: "warn", tr: "Uyarmak", ex: "I must warn you about the danger.", exTr: "Seni tehlike konusunda uyarmalıyım." },
+  { en: "waste", tr: "İsraf etmek", ex: "Don't waste food.", exTr: "Yemeği israf etme." },
+  { en: "adventure", tr: "Macera", ex: "The trip was a great adventure.", exTr: "Gezi harika bir macera oldu." },
+];
+
+// Seviyeler sırayla ilerler. locked: true olan seviye, kilit koşulu sağlanınca açılır.
 const LEVELS = [
   { id: "A1", words: A1_WORDS },
   { id: "A2", words: A2_WORDS },
+  { id: "B1", words: B1_WORDS, locked: true },
 ];
 
 /* =========================================================================
@@ -441,18 +579,65 @@ function clearSaved() {
   try { localStorage.removeItem(STORAGE_KEY); } catch {}
 }
 
+// Cihazın kendi ses motoru (Web Speech API) — internet servisi yok.
+// İngilizce ses yoksa ya da tarayıcı desteklemiyorsa status "no" olur ve hiçbir şey seslendirilmez.
+const Speech = {
+  status: "pending", // "pending" | "yes" | "no"
+  voice: null,
+  listeners: [],
+  init() {
+    if (!("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined") {
+      this.status = "no";
+      return;
+    }
+    const pick = () => {
+      let voices = [];
+      try { voices = window.speechSynthesis.getVoices() || []; } catch {}
+      const english = voices.filter(v => /^en([-_]|$)/i.test(v.lang || ""));
+      const voice = english.find(v => /^en[-_]US/i.test(v.lang)) || english[0] || null;
+      if (voice) { this.voice = voice; this.setStatus("yes"); }
+      return !!voice;
+    };
+    if (pick()) return;
+    try { window.speechSynthesis.addEventListener("voiceschanged", pick); }
+    catch { window.speechSynthesis.onvoiceschanged = pick; }
+    setTimeout(() => { if (!pick()) this.setStatus("no"); }, 2000);
+  },
+  setStatus(status) {
+    if (this.status === status) return;
+    this.status = status;
+    this.listeners.forEach(fn => fn());
+  },
+  onChange(fn) { this.listeners.push(fn); },
+  speak(text) {
+    if (this.status !== "yes") return;
+    try {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.voice = this.voice;
+      utterance.lang = this.voice.lang;
+      utterance.rate = 0.9;
+      window.speechSynthesis.speak(utterance);
+    } catch {}
+  },
+};
+
 /* =========================================================================
    4) AŞAMA 1 — İsim, seviye testi ve günlük çalışma
    Akış:
      (0) İlk açılışta isim sorulur (yalnızca cihazda saklanır).
      (1) Yeni kullanıcıya bir kez seviye testi: A1 + A2'den karışık, 4 şıklı.
          Toplam doğru sayısına göre A1 ya da A2'den başlanır.
-     (2) Her gün (cihaz saatine göre) o seviyede görülmemiş 10 yeni kelime:
-           a) seçmeli sorular (4 şık)
+     (2) Her gün (cihaz saatine göre) 10 kelime:
+           a) seçmeli sorular (4 şık) — ilk denemede doğru bilinen kelime "bilinen" sayılır
            b) yanlış cevaplananlar şıksız, Türkçesi yazılarak tekrar edilir
-           c) her kelimeyle İngilizce cümle kurma
+           c) dinleme: kelime yalnızca sesli okunur, 4 Türkçe şık (İngilizce ses yoksa atlanır)
+           d) boşluk doldurma: örnek cümlede kelimenin yeri boş, doğru yazılana kadar
+           e) anlama: örnek cümle yazılı + sesli, "ne anlatıyor?" 4 Türkçe şık
          Aynı gün tekrar girilirse aynı kelimelerle kaldığı yerden devam edilir.
-     (3) İlerleme ekranı: üst üste giriş serisi ve son 30 günde görülen kelime.
+     (3) Kilitli seviye (B1): önceki seviyelerin kelimelerinin %90'ı bilinince açılır.
+         Önceki seviyeler bitip oran %90'ın altındaysa günler bilinmeyen kelimelerle tekrar günü olur.
+     (4) İlerleme ekranı: seri, son 30 günde görülen kelime, seviyelerin açık/kilitli durumu.
    Her aşama kendi içinde bağımsız: mount(container) ile ekrana çizilir.
    ========================================================================= */
 
@@ -476,30 +661,24 @@ function shiftDate(dateStr, days) {
   return localDateStr(new Date(y, m - 1, d + days));
 }
 
-// Cümle kontrolü — dil bilgisine bakılmaz; yalnızca kelime geçiyor mu ve cümle yeterince uzun mu.
-// Kelimenin basit ekli hâlleri de kabul edilir: apples, watches, walked, walking, writing, running, babies.
-function wordFormsOf(word) {
-  const w = word.toLowerCase();
-  const forms = new Set([w, w + "s", w + "es", w + "ed", w + "d", w + "ing"]);
-  if (w.endsWith("e")) forms.add(w.slice(0, -1) + "ing");
-  if (w.endsWith("y")) { forms.add(w.slice(0, -1) + "ies"); forms.add(w.slice(0, -1) + "ied"); }
-  const last = w[w.length - 1];
-  if (/[bcdfgklmnprtvz]/.test(last)) { forms.add(w + last + "ing"); forms.add(w + last + "ed"); }
-  return forms;
+// Örnek cümlede kelimenin yerini boş bırakır: "This apple is sweet." → ["This ", " is sweet."]
+function splitAtWord(sentence, word) {
+  const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = new RegExp("\\b" + escaped + "\\b", "i").exec(sentence);
+  if (!match) return [sentence + " ", ""];
+  return [sentence.slice(0, match.index), sentence.slice(match.index + match[0].length)];
 }
-function checkSentence(sentence, word) {
-  const tokens = (sentence.toLowerCase().match(/[a-z']+/g) || []);
-  if (!tokens.some(t => wordFormsOf(word).has(t))) {
-    return { ok: false, reason: "Cümlede \"" + word + "\" kelimesi geçmiyor." };
-  }
-  if (tokens.length < MIN_SENTENCE_WORDS) {
-    return { ok: false, reason: "Cümle en az " + MIN_SENTENCE_WORDS + " kelime olmalı." };
-  }
-  return { ok: true };
+
+// Boşluk doldurma kontrolü: yalnızca büyük/küçük harf ve baştaki/sondaki boşluk önemsenmez.
+function fillAnswerIsCorrect(typed, word) {
+  return typed.trim().toLowerCase() === word.toLowerCase();
 }
 
 const OPTION_LETTERS = "ABCDEFGH";
-const PHASE_LABELS = { choice: "Seçmeli", write: "Yazma", sentence: "Cümle", done: "Tamamlandı" };
+const PHASE_LABELS = {
+  choice: "Seçmeli", write: "Yazma", listen: "Dinleme", fill: "Boşluk doldurma",
+  understand: "Anlama", done: "Tamamlandı",
+};
 
 const Stage1 = {
   mount(container) {
@@ -513,6 +692,9 @@ const Stage1 = {
         placement: null,
         levelIndex: 0,
         seen: {},      // seviye id → günlük olarak verilmiş kelimeler (en)
+        known: {},     // seviye id → seçmeli soruda ilk denemede doğru bilinen kelimeler (en)
+        unlocked: {},  // seviye id → kilitli seviye açıldı mı
+        unlockNotice: null,
         visits: [],    // uygulamanın açıldığı günler (seri için)
         history: [],   // { date, lvl, words } — son günlerde görülen kelimeler
         dayCount: 0,
@@ -520,20 +702,35 @@ const Stage1 = {
       };
     }
 
-    // Önceki sürümlerin kaydı: isim ve seviye korunur; eski 100 kelimelik tur günlük sisteme aktarılmaz.
+    // Önceki sürümlerin kaydını bu sürüme taşır; isim, gün sayısı, seri ve görülen kelimeler korunur.
     function migrate(saved) {
       if (!saved) return null;
-      if (saved.seen) return saved;
-      const s = freshState();
-      s.name = saved.name || null;
-      s.needsPlacement = !!saved.needsPlacement;
-      s.levelIndex = saved.levelIndex || 0;
-      if (s.name && s.needsPlacement) s.placement = newPlacement();
-      return s;
+      if (!saved.seen) {
+        // günlük sistemden önceki sürüm: yalnızca isim ve seviye korunur
+        const s = freshState();
+        s.name = saved.name || null;
+        s.needsPlacement = !!saved.needsPlacement;
+        s.levelIndex = saved.levelIndex || 0;
+        if (s.name && s.needsPlacement) s.placement = newPlacement();
+        return s;
+      }
+      saved.known = saved.known || {};
+      saved.unlocked = saved.unlocked || {};
+      if (saved.unlockNotice === undefined) saved.unlockNotice = null;
+      // yarım kalmış cevap kaydı eski sürümde "en" alanıyla tutuluyordu
+      [saved.placement, saved.day && saved.day.round].forEach(holder => {
+        if (holder && holder.lastAnswer && !holder.lastAnswer.key) holder.lastAnswer.key = holder.lastAnswer.en;
+      });
+      if (saved.day && saved.day.phase === "sentence") {
+        // serbest cümle adımı kaldırıldı: kalan kelimeler boşluk doldurma olarak devam eder
+        saved.day.phase = "fill";
+        saved.day.fillIndex = saved.day.sentenceIndex || 0;
+      }
+      return saved;
     }
 
     function newRound(deck) {
-      return { deck, index: 0, answered: 0, correct: 0, wrong: 0, lastAnswer: null };
+      return { deck, index: 0, answered: 0, correct: 0, wrong: 0, lastAnswer: null, shown: null };
     }
 
     function newPlacement() {
@@ -544,12 +741,60 @@ const Stage1 = {
       return newRound(shuffle(deck));
     }
 
-    function unseenWords(lvlIndex) {
-      const seen = new Set(state.seen[LEVELS[lvlIndex].id] || []);
-      return LEVELS[lvlIndex].words.filter(w => !seen.has(w.en));
+    const levelId = i => LEVELS[i].id;
+    function unseenWords(i) {
+      const seen = new Set(state.seen[levelId(i)] || []);
+      return LEVELS[i].words.filter(w => !seen.has(w.en));
+    }
+    function unknownWords(i) {
+      const known = new Set(state.known[levelId(i)] || []);
+      return LEVELS[i].words.filter(w => !known.has(w.en));
+    }
+    function knownCount(i) { return (state.known[levelId(i)] || []).length; }
+    function isUnlocked(i) { return !LEVELS[i].locked || !!state.unlocked[levelId(i)]; }
+
+    // Kilitli bir seviyenin açılma oranı: kendinden önceki seviyelerde bilinen kelime yüzdesi.
+    function unlockPercent(i) {
+      const before = LEVELS.slice(0, i);
+      const total = before.reduce((sum, lvl) => sum + lvl.words.length, 0);
+      const known = before.reduce((sum, _, j) => sum + knownCount(j), 0);
+      return total === 0 ? 100 : Math.floor((known / total) * 100);
+    }
+    function checkUnlocks() {
+      LEVELS.forEach((lvl, i) => {
+        if (lvl.locked && !isUnlocked(i) && unlockPercent(i) >= UNLOCK_PERCENT) {
+          state.unlocked[lvl.id] = true;
+          state.unlockNotice = lvl.id;
+        }
+      });
+    }
+    function markKnown(i, en) {
+      const id = levelId(i);
+      state.known[id] = state.known[id] || [];
+      if (!state.known[id].includes(en)) state.known[id].push(en);
+      checkUnlocks();
     }
 
-    // Bugünün kaydını hazırlar: girişi seriye ekler, yeni günse 10 yeni kelime seçer.
+    // Yeni günün kelimeleri: önce açılmış kilitli seviye, sonra sıradaki seviye,
+    // kilit bekleniyorsa bilinmeyen kelimelerle tekrar günü.
+    function pickDay() {
+      const take = words => shuffle(words).slice(0, DAILY_WORD_COUNT).map(w => w.en);
+      for (let i = LEVELS.length - 1; i >= 0; i--) {
+        if (LEVELS[i].locked && isUnlocked(i) && unseenWords(i).length) return { lvl: i, review: false, words: take(unseenWords(i)) };
+      }
+      for (let i = state.levelIndex; i < LEVELS.length; i++) {
+        if (!LEVELS[i].locked && unseenWords(i).length) return { lvl: i, review: false, words: take(unseenWords(i)) };
+      }
+      const waitingForUnlock = LEVELS.some((lvl, i) => lvl.locked && !isUnlocked(i));
+      if (waitingForUnlock) {
+        for (let i = 0; i < LEVELS.length; i++) {
+          if (!LEVELS[i].locked && unknownWords(i).length) return { lvl: i, review: true, words: take(unknownWords(i)) };
+        }
+      }
+      return null;
+    }
+
+    // Bugünün kaydını hazırlar: girişi seriye ekler, yeni günse kelimeleri seçer.
     function ensureToday() {
       const today = localDateStr();
       if (state.visits[state.visits.length - 1] !== today) {
@@ -558,31 +803,30 @@ const Stage1 = {
       }
       if (state.day && state.day.date === today) return;
 
-      let lvl = state.levelIndex;
-      while (lvl < LEVELS.length && unseenWords(lvl).length === 0) lvl++;
-      if (lvl >= LEVELS.length) {
+      const pick = pickDay();
+      if (!pick) {
         state.day = { date: today, number: state.dayCount, allDone: true };
         save(state);
         return;
       }
-
-      const words = shuffle(unseenWords(lvl)).slice(0, DAILY_WORD_COUNT).map(w => w.en);
-      const id = LEVELS[lvl].id;
-      state.levelIndex = lvl;
-      state.seen[id] = [...(state.seen[id] || []), ...words];
+      const id = levelId(pick.lvl);
+      if (!pick.review) state.levelIndex = pick.lvl;
+      const seen = new Set(state.seen[id] || []);
+      state.seen[id] = [...(state.seen[id] || []), ...pick.words.filter(en => !seen.has(en))];
       state.dayCount++;
       const oldest = shiftDate(today, -(PROGRESS_WINDOW_DAYS * 2));
       state.history = state.history.filter(h => h.date >= oldest);
-      state.history.push({ date: today, lvl, words });
+      state.history.push({ date: today, lvl: pick.lvl, words: pick.words });
       state.day = {
         date: today,
         number: state.dayCount,
-        lvl,
-        words,
+        lvl: pick.lvl,
+        review: pick.review,
+        words: pick.words,
         phase: "choice",
         mistakes: [],
-        round: newRound(shuffle(words)),
-        sentenceIndex: 0,
+        round: newRound(shuffle(pick.words)),
+        fillIndex: 0,
       };
       save(state);
     }
@@ -590,14 +834,6 @@ const Stage1 = {
     function dayPool() { return LEVELS[state.day.lvl].words; }
     function findDayWord(en) { return dayPool().find(w => w.en === en); }
     function inPlacement() { return !!state.placement; }
-
-    // 1 doğru + (CHOICE_COUNT-1) farklı yanlış anlam, aynı seviyenin kelimelerinden; sıra rastgele.
-    function optionsFor(word, pool) {
-      const wrong = shuffle(pool.filter(w => w.tr !== word.tr))
-        .slice(0, CHOICE_COUNT - 1)
-        .map(w => w.tr);
-      return shuffle([word.tr, ...wrong]);
-    }
 
     function streakDays() {
       const visited = new Set(state.visits);
@@ -612,6 +848,23 @@ const Stage1 = {
       const seen = new Set();
       state.history.filter(h => h.date >= since).forEach(h => h.words.forEach(en => seen.add(h.lvl + ":" + en)));
       return seen.size;
+    }
+
+    // Hoparlör düğmesi — cihazda İngilizce ses yoksa hiç gösterilmez.
+    function speakButton(text) {
+      if (Speech.status !== "yes") return null;
+      const btn = el("button", "speak-btn", "🔊");
+      btn.type = "button";
+      btn.setAttribute("aria-label", "Sesli oku");
+      btn.addEventListener("click", () => Speech.speak(text));
+      return btn;
+    }
+    function wordRow(text) {
+      const row = el("div", "word-row");
+      row.append(el("div", "word", text.toUpperCase()));
+      const speak = speakButton(text);
+      if (speak) row.append(speak);
+      return row;
     }
 
     function renderTop() {
@@ -634,13 +887,14 @@ const Stage1 = {
         left.append(el("strong", null, "Tüm seviyeler tamamlandı"));
       } else {
         left.append(el("strong", null, "Gün " + state.day.number),
-          " · " + LEVELS[state.day.lvl].id + " · " + PHASE_LABELS[state.day.phase]);
+          " · " + levelId(state.day.lvl) + (state.day.review ? " tekrar" : "") +
+          " · " + PHASE_LABELS[state.day.phase]);
       }
       bar.append(left);
       top.append(bar);
 
       const holder = inPlacement() ? state.placement
-        : (view === "study" && state.day.round && ["choice", "write"].includes(state.day.phase)) ? state.day.round
+        : (view === "study" && ["choice", "write", "listen", "understand"].includes(state.day.phase)) ? state.day.round
         : null;
       if (holder) {
         const percent = holder.answered === 0 ? 0 : Math.round((holder.correct / holder.answered) * 100);
@@ -658,6 +912,18 @@ const Stage1 = {
         top.append(stats);
       }
       return top;
+    }
+
+    function unlockBanner() {
+      if (!state.unlockNotice) return null;
+      const banner = el("div", "banner");
+      banner.append(el("span", null, "🎉 " + state.unlockNotice + " kilidi açıldı! Yeni günlerde " +
+        state.unlockNotice + " kelimeleri gelecek."));
+      const ok = el("button", "link-btn", "Tamam");
+      ok.type = "button";
+      ok.addEventListener("click", () => { state.unlockNotice = null; save(state); render(); });
+      banner.append(ok);
+      return banner;
     }
 
     function resetButton() {
@@ -695,16 +961,36 @@ const Stage1 = {
       }
 
       ensureToday(); // gün değiştiyse (gece yarısı geçtiyse) yeni günün kelimeleri burada gelir
-      container.append(renderTop());
       const day = state.day;
+      // Cihazda İngilizce ses yoksa dinleme adımı atlanır.
+      if (day.phase === "listen" && Speech.status === "no") {
+        day.phase = "fill";
+        day.fillIndex = 0;
+        save(state);
+      }
+      // Anlama adımı (günün son adımı) bittiyse gün tamamlanır.
+      if (day.phase === "understand" && day.round.index >= day.round.deck.length && !day.round.lastAnswer) {
+        day.phase = "done";
+        save(state);
+      }
 
+      container.append(renderTop());
+      const banner = unlockBanner();
+      if (banner) container.append(banner);
+
+      const roundOver = day.round && day.round.index >= day.round.deck.length && !day.round.lastAnswer;
       if (view === "progress") card.append(renderProgress());
       else if (day.allDone) card.append(renderAllDone());
-      else if (day.phase === "sentence") renderSentenceCard(card);
       else if (day.phase === "done") card.append(renderDayDone());
-      else if (day.round.index >= day.round.deck.length && !day.round.lastAnswer) card.append(renderPhaseSummary());
+      else if (day.phase === "fill") {
+        if (day.fillIndex >= day.words.length) card.append(renderPhaseSummary());
+        else renderFillCard(card);
+      }
+      else if (roundOver) card.append(renderPhaseSummary());
       else if (day.phase === "choice") renderChoiceCard(card);
-      else renderWriteCard(card);
+      else if (day.phase === "write") renderWriteCard(card);
+      else if (day.phase === "listen") renderListenCard(card);
+      else renderUnderstandCard(card);
 
       container.append(card, resetButton());
     }
@@ -765,18 +1051,18 @@ const Stage1 = {
       return box;
     }
 
-    // Seçmeli ya da yazma adımı bittiğinde bir sonraki adıma geçiş.
+    // Bir adım bittiğinde sonraki adıma geçiş ekranı.
     function renderPhaseSummary() {
       const day = state.day;
       const r = day.round;
       const box = el("div", "summary");
-      const toSentence = () => { day.phase = "sentence"; day.sentenceIndex = 0; };
+      const goListen = () => { day.phase = "listen"; day.round = newRound(shuffle(day.words)); };
+      const goFill = () => { day.phase = "fill"; day.fillIndex = 0; };
+      const goUnderstand = () => { day.phase = "understand"; day.round = newRound(shuffle(day.words)); };
+      const afterWrite = Speech.status === "no" ? goFill : goListen;
 
       if (day.phase === "choice") {
-        box.append(
-          el("h2", null, "Seçmeli sorular bitti"),
-          el("p", null, "Doğru: " + r.correct + " · Yanlış: " + r.wrong),
-        );
+        box.append(el("h2", null, "Seçmeli sorular bitti"), el("p", null, "Doğru: " + r.correct + " · Yanlış: " + r.wrong));
         if (day.mistakes.length > 0) {
           box.append(
             el("p", null, "Yanlış yaptığın " + day.mistakes.length +
@@ -787,19 +1073,21 @@ const Stage1 = {
             }),
           );
         } else {
-          box.append(
-            el("p", null, "Hepsini bildin! Sırada cümle alıştırması var."),
-            actionButton("Cümle alıştırmasına geç", toSentence),
-          );
+          box.append(el("p", null, "Hepsini bildin!"),
+            actionButton(afterWrite === goListen ? "Dinleme adımına geç" : "Boşluk doldurmaya geç", afterWrite));
         }
-        return box;
+      } else if (day.phase === "write") {
+        box.append(el("h2", null, "Yazma adımı bitti"),
+          actionButton(afterWrite === goListen ? "Dinleme adımına geç" : "Boşluk doldurmaya geç", afterWrite));
+      } else if (day.phase === "listen") {
+        box.append(el("h2", null, "Dinleme bitti"), el("p", null, "Doğru: " + r.correct + " · Yanlış: " + r.wrong),
+          el("p", null, "Sırada boşluk doldurma var: cümlede eksik kelimeyi yazacaksın."),
+          actionButton("Boşluk doldurmaya geç", goFill));
+      } else if (day.phase === "fill") {
+        box.append(el("h2", null, "Boşluk doldurma bitti"),
+          el("p", null, "Son adım: İngilizce cümleleri okuyup ne anlattığını seçeceksin."),
+          actionButton("Anlama adımına geç", goUnderstand));
       }
-
-      box.append(
-        el("h2", null, "Yazma adımı bitti"),
-        el("p", null, "Sırada cümle alıştırması var: günün her kelimesiyle bir İngilizce cümle kuracaksın."),
-        actionButton("Cümle alıştırmasına geç", toSentence),
-      );
       return box;
     }
 
@@ -831,10 +1119,14 @@ const Stage1 = {
         ["Son " + PROGRESS_WINDOW_DAYS + " günde görülen kelime", String(wordsSeenInWindow())],
         ["Çalışma günü", "Gün " + state.dayCount],
       ];
-      if (!state.day.allDone) {
-        const id = LEVELS[state.day.lvl].id;
-        rows.push(["Seviye", id + " · " + (state.seen[id] || []).length + "/" + LEVELS[state.day.lvl].words.length + " kelime"]);
-      }
+      LEVELS.forEach((lvl, i) => {
+        if (isUnlocked(i)) {
+          rows.push([lvl.id, "✅ Açık · " + knownCount(i) + "/" + lvl.words.length + " doğru"]);
+        } else {
+          const prev = LEVELS.slice(0, i).map(l => l.id).join("+");
+          rows.push([lvl.id, "🔒 Kilitli · " + prev + " %" + unlockPercent(i) + " / %" + UNLOCK_PERCENT]);
+        }
+      });
       rows.forEach(([label, value]) => {
         const li = el("li");
         li.append(el("span", null, label), el("span", "value", value));
@@ -861,65 +1153,81 @@ const Stage1 = {
       if (isCorrect) holder.correct++; else holder.wrong++;
       holder.index++;
       holder.lastAnswer = lastAnswer;
+      holder.shown = null;
       save(state);
       container.querySelector(".top").replaceWith(renderTop());
     }
 
-    // Ortak şıklı soru kartı (günlük seçmeli sorular ve seviye testi).
-    function renderChoiceQuestion(card, { holder, word, pool, extra, onAnswered }) {
-      // Cevaplanmış ama henüz geçilmemiş soru varsa (ör. sayfa yenilendi) onu sonuçlu göster.
-      const pending = holder.lastAnswer;
-      const choices = pending ? pending.choices : optionsFor(word, pool);
+    // 1 doğru + (CHOICE_COUNT-1) farklı yanlış şık; sıra rastgele.
+    function optionsFor(correct, pool) {
+      const wrong = shuffle([...new Set(pool)].filter(t => t !== correct)).slice(0, CHOICE_COUNT - 1);
+      return shuffle([correct, ...wrong]);
+    }
 
-      card.append(el("div", "word", word.en.toUpperCase()));
+    // Ortak şıklı soru kartı. Gösterilen şıklar kaydedilir; sayfa yenilense de aynı şıklar gelir.
+    function renderChoiceQuestion(card, { holder, key, correct, pool, renderPrompt, counterLabel, extra, onAnswered, onResult }) {
+      const pending = holder.lastAnswer;
+      let choices;
+      if (pending) choices = pending.choices;
+      else if (holder.shown && holder.shown.key === key) choices = holder.shown.choices;
+      else { choices = optionsFor(correct, pool); holder.shown = { key, choices }; save(state); }
+
+      renderPrompt(card, !!pending);
 
       const options = el("div", "options");
       const feedback = el("div", "feedback");
-      const buttons = choices.map((meaning, i) => {
+      const buttons = choices.map((text, i) => {
         const btn = el("button", "option");
         btn.type = "button";
-        btn.append(el("span", "letter", OPTION_LETTERS[i] + ")"), meaning);
-        btn.addEventListener("click", () => answer(meaning));
+        btn.append(el("span", "letter", OPTION_LETTERS[i] + ")"), text);
+        btn.addEventListener("click", () => answer(text));
         options.append(btn);
-        return { btn, meaning };
+        return { btn, text };
       });
 
       function showResult(picked) {
-        const isCorrect = picked === word.tr;
-        buttons.forEach(({ btn, meaning }) => {
+        const isCorrect = picked === correct;
+        buttons.forEach(({ btn, text }) => {
           btn.disabled = true;
-          if (meaning === word.tr) btn.classList.add("correct");
-          else if (meaning === picked) btn.classList.add("wrong");
+          if (text === correct) btn.classList.add("correct");
+          else if (text === picked) btn.classList.add("wrong");
         });
-        const correctLetter = OPTION_LETTERS[choices.indexOf(word.tr)];
+        const correctLetter = OPTION_LETTERS[choices.indexOf(correct)];
         feedback.className = "feedback " + (isCorrect ? "correct" : "wrong");
-        feedback.textContent = isCorrect
-          ? "Doğru!"
-          : "Yanlış. Doğru cevap: " + correctLetter + ") " + word.tr;
+        feedback.textContent = isCorrect ? "Doğru!" : "Yanlış. Doğru cevap: " + correctLetter + ") " + correct;
+        if (onResult) onResult(feedback);
         autoNext(isCorrect, () => { holder.lastAnswer = null; });
       }
 
       function answer(picked) {
-        const isCorrect = picked === word.tr;
+        const isCorrect = picked === correct;
         onAnswered(isCorrect);
-        recordAnswer(holder, isCorrect, { ...extra, en: word.en, choices, picked });
+        recordAnswer(holder, isCorrect, { ...extra, key, choices, picked });
         showResult(picked);
       }
 
       card.append(options, feedback);
       const shownIndex = pending ? holder.index : holder.index + 1;
-      card.append(el("div", "remaining", (inPlacement() ? "Soru " : "Kart ") + shownIndex + " / " + holder.deck.length));
+      card.append(el("div", "remaining", counterLabel + " " + shownIndex + " / " + holder.deck.length));
       if (pending) showResult(pending.picked);
+    }
+
+    function currentKey(holder, deckItemToKey) {
+      return holder.lastAnswer ? holder.lastAnswer.key : deckItemToKey(holder.deck[holder.index]);
     }
 
     function renderPlacementCard(card) {
       const p = state.placement;
-      const item = p.lastAnswer ? { lvl: p.lastAnswer.lvl, en: p.lastAnswer.en } : p.deck[p.index];
+      const item = p.lastAnswer ? { lvl: p.lastAnswer.lvl, en: p.lastAnswer.key } : p.deck[p.index];
       const pool = LEVELS[item.lvl].words;
+      const word = pool.find(w => w.en === item.en);
       renderChoiceQuestion(card, {
         holder: p,
-        word: pool.find(w => w.en === item.en),
-        pool,
+        key: word.en,
+        correct: word.tr,
+        pool: pool.map(w => w.tr),
+        renderPrompt: c => c.append(wordRow(word.en)),
+        counterLabel: "Soru",
         extra: { lvl: item.lvl },
         onAnswered: () => {},
       });
@@ -927,23 +1235,78 @@ const Stage1 = {
 
     function renderChoiceCard(card) {
       const day = state.day;
-      const r = day.round;
-      const word = findDayWord(r.lastAnswer ? r.lastAnswer.en : r.deck[r.index]);
+      const word = findDayWord(currentKey(day.round, en => en));
       renderChoiceQuestion(card, {
-        holder: r,
-        word,
-        pool: dayPool(),
+        holder: day.round,
+        key: word.en,
+        correct: word.tr,
+        pool: dayPool().map(w => w.tr),
+        renderPrompt: c => c.append(wordRow(word.en)),
+        counterLabel: "Kart",
         extra: {},
-        onAnswered: ok => { if (!ok) day.mistakes.push(word.en); },
+        onAnswered: ok => {
+          if (ok) markKnown(day.lvl, word.en);
+          else day.mistakes.push(word.en);
+        },
+      });
+    }
+
+    // Dinleme: kelime yazıyla gösterilmez, yalnızca sesli okunur.
+    function renderListenCard(card) {
+      if (Speech.status !== "yes") {
+        card.append(el("p", "summary", "Ses hazırlanıyor…"));
+        return;
+      }
+      const day = state.day;
+      const word = findDayWord(currentKey(day.round, en => en));
+      renderChoiceQuestion(card, {
+        holder: day.round,
+        key: word.en,
+        correct: word.tr,
+        pool: dayPool().map(w => w.tr),
+        renderPrompt: (c, answered) => {
+          const listen = el("button", "primary listen-btn", "🔊 Dinle");
+          listen.type = "button";
+          listen.addEventListener("click", () => Speech.speak(word.en));
+          c.append(el("p", "question", "Duyduğun kelimenin anlamı ne?"), listen);
+          if (!answered) Speech.speak(word.en);
+        },
+        counterLabel: "Dinleme",
+        extra: {},
+        onAnswered: () => {},
+        onResult: feedback => feedback.after(el("div", "reveal", "Kelime: " + word.en.toUpperCase())),
+      });
+    }
+
+    // Anlama: örnek cümle yazıyla gösterilir ve sesli okunur; Türkçe karşılığı seçilir.
+    function renderUnderstandCard(card) {
+      const day = state.day;
+      const word = findDayWord(currentKey(day.round, en => en));
+      renderChoiceQuestion(card, {
+        holder: day.round,
+        key: word.en,
+        correct: word.exTr,
+        pool: dayPool().map(w => w.exTr),
+        renderPrompt: (c, answered) => {
+          const row = el("div", "sentence-row");
+          row.append(el("div", "sentence-text", word.ex));
+          const speak = speakButton(word.ex);
+          if (speak) row.append(speak);
+          c.append(row, el("p", "question", "Bu cümle ne anlatıyor?"));
+          if (!answered) Speech.speak(word.ex);
+        },
+        counterLabel: "Cümle",
+        extra: {},
+        onAnswered: () => {},
       });
     }
 
     function renderWriteCard(card) {
       const r = state.day.round;
       const pending = r.lastAnswer;
-      const word = findDayWord(pending ? pending.en : r.deck[r.index]);
+      const word = findDayWord(pending ? pending.key : r.deck[r.index]);
 
-      card.append(el("div", "word", word.en.toUpperCase()));
+      card.append(wordRow(word.en));
       card.append(el("div", "write-hint", "Türkçe anlamını yaz"));
 
       const form = el("form", "write-form");
@@ -982,7 +1345,7 @@ const Stage1 = {
         if (!typed.trim()) return;
         const isCorrect = normalizeAnswer(typed) === normalizeAnswer(word.tr);
         if (!isCorrect) r.deck.push(word.en); // doğru yazılana kadar tekrar sorulur
-        recordAnswer(r, isCorrect, { en: word.en, typed });
+        recordAnswer(r, isCorrect, { key: word.en, typed });
         showResult(typed);
       });
 
@@ -991,21 +1354,24 @@ const Stage1 = {
       else queueMicrotask(() => input.focus()); // kart ekrana eklendikten sonra imleç kutuya gelsin
     }
 
-    // Cümle alıştırması: günün her kelimesiyle, doğru olana kadar.
-    function renderSentenceCard(card) {
+    // Boşluk doldurma: örnek cümlede kelimenin yeri boş; doğru yazılana kadar aynı cümle sorulur.
+    // Cevabı söyleyeceği için bu kartta hoparlör yok.
+    function renderFillCard(card) {
       const day = state.day;
-      const word = findDayWord(day.words[day.sentenceIndex]);
+      const word = findDayWord(day.words[day.fillIndex]);
+      const [before, after] = splitAtWord(word.ex, word.en);
 
-      card.append(el("div", "word", word.en.toUpperCase()));
-      card.append(el("div", "write-hint",
-        "Bu kelimeyle İngilizce bir cümle yaz (en az " + MIN_SENTENCE_WORDS + " kelime)"));
+      const sentence = el("div", "fill-sentence");
+      sentence.append(before, el("span", "blank", " "), after);
+      card.append(sentence, el("div", "write-hint", "İpucu: " + word.tr));
 
       const form = el("form", "write-form");
       const input = el("input", "write-input");
       input.type = "text";
       input.autocomplete = "off";
-      input.setAttribute("autocapitalize", "sentences");
+      input.setAttribute("autocapitalize", "off");
       input.spellcheck = false;
+      input.placeholder = "Boşluğa gelecek kelime";
       const check = el("button", "primary", "Kontrol et");
       check.type = "submit";
       check.style.marginTop = "0";
@@ -1016,11 +1382,10 @@ const Stage1 = {
       form.addEventListener("submit", event => {
         event.preventDefault();
         if (!input.value.trim()) return;
-        const result = checkSentence(input.value, word.en);
-        if (!result.ok) {
+        if (!fillAnswerIsCorrect(input.value, word.en)) {
           input.classList.add("wrong");
           feedback.className = "feedback wrong";
-          feedback.textContent = "Yanlış, tekrar dene. " + result.reason;
+          feedback.textContent = "Yanlış, tekrar dene.";
           input.focus();
           return;
         }
@@ -1030,18 +1395,19 @@ const Stage1 = {
         check.remove();
         feedback.className = "feedback correct";
         feedback.textContent = "Doğru!";
-        day.sentenceIndex++;
-        if (day.sentenceIndex >= day.words.length) day.phase = "done";
+        day.fillIndex++;
         save(state);
-        container.querySelector(".top").replaceWith(renderTop());
         autoNext(true, () => {});
       });
       input.addEventListener("input", () => input.classList.remove("wrong"));
 
       card.append(form, feedback,
-        el("div", "remaining", "Cümle " + (day.sentenceIndex + 1) + " / " + day.words.length));
+        el("div", "remaining", "Boşluk " + (day.fillIndex + 1) + " / " + day.words.length));
       queueMicrotask(() => input.focus());
     }
+
+    // Ses durumu belli olunca (ya da değişince) ekranı yeniden çiz: hoparlörler görünür/gizlenir.
+    Speech.onChange(() => render());
 
     render();
   },
@@ -1050,6 +1416,7 @@ const Stage1 = {
 /* =========================================================================
    BAŞLAT — şu an yalnızca Aşama 1 var
    ========================================================================= */
+Speech.init();
 Stage1.mount(document.getElementById("app"));
 </script>
 </body>
