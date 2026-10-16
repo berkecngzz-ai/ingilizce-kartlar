@@ -38,7 +38,29 @@
   }
   #app { width: 100%; max-width: 440px; }
 
-  .greeting { font-size: 20px; font-weight: 700; margin: 0 0 12px; word-break: break-word; }
+  .top-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .greeting { font-size: 20px; font-weight: 700; margin: 0; word-break: break-word; }
+  .link-btn {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 14px;
+    color: var(--accent);
+    cursor: pointer;
+    white-space: nowrap;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .progress-list { list-style: none; padding: 0; margin: 0 0 8px; }
+  .progress-list li {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .progress-list li:last-child { border-bottom: none; }
+  .progress-list .value { font-weight: 700; text-align: right; }
   .name-note { color: var(--muted); font-size: 13px; text-align: center; margin-top: 12px; }
 
   .level-bar {
@@ -96,7 +118,10 @@
     color: var(--text);
     cursor: pointer;
   }
-  .option:hover:not(:disabled) { border-color: var(--accent); }
+  /* Şıklarda hiçbir vurgu yok: dokunmatik ekranda takılı kalan "üzerine gelme"
+     ve dokunma/odak efektleri bir şıkkı işaretlenmiş gibi gösterip yanıltıyordu. */
+  .option { -webkit-tap-highlight-color: transparent; }
+  .option:focus { outline: none; }
   .option:disabled { cursor: default; }
   .option .letter { font-weight: 700; margin-right: 8px; }
   .option.correct { border-color: var(--correct); background: var(--correct-bg); }
@@ -159,8 +184,11 @@
    ========================================================================= */
 const STORAGE_KEY = "ingilizce-kartlar.v2";
 const CHOICE_COUNT = 4;            // seçmeli sorularda şık sayısı (1 doğru + 3 yanlış)
-const PLACEMENT_PER_LEVEL = 6;     // seviye testinde her seviyeden sorulan kelime
-const PLACEMENT_A1_PASS = 5;       // testte A1 sorularından en az bu kadar doğru → A2'den başla
+const PLACEMENT_COUNTS = [8, 7];   // seviye testinde A1 ve A2'den sorulan kelime sayısı (toplam 15)
+const PLACEMENT_PASS = 10;         // testte toplam en az bu kadar doğru → A2'den başla
+const DAILY_WORD_COUNT = 10;       // her gün verilen yeni kelime
+const MIN_SENTENCE_WORDS = 4;      // cümle alıştırmasında en az kelime sayısı
+const PROGRESS_WINDOW_DAYS = 30;   // ilerleme ekranında "son N günde görülen kelime"
 const NAME_MAX_LENGTH = 30;
 
 /* =========================================================================
@@ -414,15 +442,17 @@ function clearSaved() {
 }
 
 /* =========================================================================
-   4) AŞAMA 1 — İsim, seviye testi, seçmeli tur + yanlışlar için yazma turu
+   4) AŞAMA 1 — İsim, seviye testi ve günlük çalışma
    Akış:
      (0) İlk açılışta isim sorulur (yalnızca cihazda saklanır).
-     (1) Yeni kullanıcıya kısa seviye testi: her seviyeden karışık kelimeler,
-         4 şıklı. A1 sorularındaki başarıya göre A1 ya da A2'den başlanır.
-     (2) Seçmeli tur: seviyedeki tüm kelimeler bir kez, 4 şıkla sorulur.
-     (3) Yazma turu: seçmeli turda yanlış cevaplanan kelimeler şıksız sorulur,
-         Türkçesi yazılır. Yanlış yazılan kelime turun sonuna tekrar eklenir.
-   Yazma turu bitince (ya da hiç yanlış yoksa) sonraki seviyeye geçilir.
+     (1) Yeni kullanıcıya bir kez seviye testi: A1 + A2'den karışık, 4 şıklı.
+         Toplam doğru sayısına göre A1 ya da A2'den başlanır.
+     (2) Her gün (cihaz saatine göre) o seviyede görülmemiş 10 yeni kelime:
+           a) seçmeli sorular (4 şık)
+           b) yanlış cevaplananlar şıksız, Türkçesi yazılarak tekrar edilir
+           c) her kelimeyle İngilizce cümle kurma
+         Aynı gün tekrar girilirse aynı kelimelerle kaldığı yerden devam edilir.
+     (3) İlerleme ekranı: üst üste giriş serisi ve son 30 günde görülen kelime.
    Her aşama kendi içinde bağımsız: mount(container) ile ekrana çizilir.
    ========================================================================= */
 
@@ -436,26 +466,69 @@ function normalizeAnswer(text) {
     .trim();
 }
 
+// Cihaz saatine göre yerel tarih: "YYYY-MM-DD".
+function localDateStr(date = new Date()) {
+  const pad = n => String(n).padStart(2, "0");
+  return date.getFullYear() + "-" + pad(date.getMonth() + 1) + "-" + pad(date.getDate());
+}
+function shiftDate(dateStr, days) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return localDateStr(new Date(y, m - 1, d + days));
+}
+
+// Cümle kontrolü — dil bilgisine bakılmaz; yalnızca kelime geçiyor mu ve cümle yeterince uzun mu.
+// Kelimenin basit ekli hâlleri de kabul edilir: apples, watches, walked, walking, writing, running, babies.
+function wordFormsOf(word) {
+  const w = word.toLowerCase();
+  const forms = new Set([w, w + "s", w + "es", w + "ed", w + "d", w + "ing"]);
+  if (w.endsWith("e")) forms.add(w.slice(0, -1) + "ing");
+  if (w.endsWith("y")) { forms.add(w.slice(0, -1) + "ies"); forms.add(w.slice(0, -1) + "ied"); }
+  const last = w[w.length - 1];
+  if (/[bcdfgklmnprtvz]/.test(last)) { forms.add(w + last + "ing"); forms.add(w + last + "ed"); }
+  return forms;
+}
+function checkSentence(sentence, word) {
+  const tokens = (sentence.toLowerCase().match(/[a-z']+/g) || []);
+  if (!tokens.some(t => wordFormsOf(word).has(t))) {
+    return { ok: false, reason: "Cümlede \"" + word + "\" kelimesi geçmiyor." };
+  }
+  if (tokens.length < MIN_SENTENCE_WORDS) {
+    return { ok: false, reason: "Cümle en az " + MIN_SENTENCE_WORDS + " kelime olmalı." };
+  }
+  return { ok: true };
+}
+
 const OPTION_LETTERS = "ABCDEFGH";
+const PHASE_LABELS = { choice: "Seçmeli", write: "Yazma", sentence: "Cümle", done: "Tamamlandı" };
 
 const Stage1 = {
   mount(container) {
-    let state = loadSaved() || freshState();
+    let state = migrate(loadSaved()) || freshState();
+    let view = "study"; // "study" | "progress" — kaydedilmez, her açılışta çalışma ekranı
 
-    // Yeni kullanıcı: isim yok, seviye testi bekliyor.
-    // Eski kayıtta (bu sürümden önce) name/needsPlacement yoktur → yalnızca isim sorulur, ilerleme korunur.
     function freshState() {
-      const s = startLevel({ levelIndex: 0 });
-      s.name = null;
-      s.needsPlacement = true;
-      s.placement = null;
-      return s;
+      return {
+        name: null,
+        needsPlacement: true,
+        placement: null,
+        levelIndex: 0,
+        seen: {},      // seviye id → günlük olarak verilmiş kelimeler (en)
+        visits: [],    // uygulamanın açıldığı günler (seri için)
+        history: [],   // { date, lvl, words } — son günlerde görülen kelimeler
+        dayCount: 0,
+        day: null,     // bugünün oturumu
+      };
     }
 
-    function startLevel(s) {
-      s.phase = "choice";
-      s.mistakes = [];
-      s.round = newRound(shuffle(LEVELS[s.levelIndex].words).map(w => w.en));
+    // Önceki sürümlerin kaydı: isim ve seviye korunur; eski 100 kelimelik tur günlük sisteme aktarılmaz.
+    function migrate(saved) {
+      if (!saved) return null;
+      if (saved.seen) return saved;
+      const s = freshState();
+      s.name = saved.name || null;
+      s.needsPlacement = !!saved.needsPlacement;
+      s.levelIndex = saved.levelIndex || 0;
+      if (s.name && s.needsPlacement) s.placement = newPlacement();
       return s;
     }
 
@@ -463,19 +536,59 @@ const Stage1 = {
       return { deck, index: 0, answered: 0, correct: 0, wrong: 0, lastAnswer: null };
     }
 
-    // Seviye testi: ilk iki seviyeden karışık kelimeler.
     function newPlacement() {
       const deck = [];
-      LEVELS.slice(0, 2).forEach((lvl, lvlIndex) => {
-        shuffle(lvl.words).slice(0, PLACEMENT_PER_LEVEL).forEach(w => deck.push({ lvl: lvlIndex, en: w.en }));
+      PLACEMENT_COUNTS.forEach((count, lvlIndex) => {
+        shuffle(LEVELS[lvlIndex].words).slice(0, count).forEach(w => deck.push({ lvl: lvlIndex, en: w.en }));
       });
-      const p = newRound(shuffle(deck));
-      p.a1Correct = 0;
-      return p;
+      return newRound(shuffle(deck));
     }
 
-    function level() { return LEVELS[state.levelIndex]; }
-    function findWord(en) { return level().words.find(w => w.en === en); }
+    function unseenWords(lvlIndex) {
+      const seen = new Set(state.seen[LEVELS[lvlIndex].id] || []);
+      return LEVELS[lvlIndex].words.filter(w => !seen.has(w.en));
+    }
+
+    // Bugünün kaydını hazırlar: girişi seriye ekler, yeni günse 10 yeni kelime seçer.
+    function ensureToday() {
+      const today = localDateStr();
+      if (state.visits[state.visits.length - 1] !== today) {
+        state.visits.push(today);
+        state.visits = state.visits.slice(-400);
+      }
+      if (state.day && state.day.date === today) return;
+
+      let lvl = state.levelIndex;
+      while (lvl < LEVELS.length && unseenWords(lvl).length === 0) lvl++;
+      if (lvl >= LEVELS.length) {
+        state.day = { date: today, number: state.dayCount, allDone: true };
+        save(state);
+        return;
+      }
+
+      const words = shuffle(unseenWords(lvl)).slice(0, DAILY_WORD_COUNT).map(w => w.en);
+      const id = LEVELS[lvl].id;
+      state.levelIndex = lvl;
+      state.seen[id] = [...(state.seen[id] || []), ...words];
+      state.dayCount++;
+      const oldest = shiftDate(today, -(PROGRESS_WINDOW_DAYS * 2));
+      state.history = state.history.filter(h => h.date >= oldest);
+      state.history.push({ date: today, lvl, words });
+      state.day = {
+        date: today,
+        number: state.dayCount,
+        lvl,
+        words,
+        phase: "choice",
+        mistakes: [],
+        round: newRound(shuffle(words)),
+        sentenceIndex: 0,
+      };
+      save(state);
+    }
+
+    function dayPool() { return LEVELS[state.day.lvl].words; }
+    function findDayWord(en) { return dayPool().find(w => w.en === en); }
     function inPlacement() { return !!state.placement; }
 
     // 1 doğru + (CHOICE_COUNT-1) farklı yanlış anlam, aynı seviyenin kelimelerinden; sıra rastgele.
@@ -486,34 +599,64 @@ const Stage1 = {
       return shuffle([word.tr, ...wrong]);
     }
 
+    function streakDays() {
+      const visited = new Set(state.visits);
+      let streak = 0;
+      let date = localDateStr();
+      while (visited.has(date)) { streak++; date = shiftDate(date, -1); }
+      return streak;
+    }
+
+    function wordsSeenInWindow() {
+      const since = shiftDate(localDateStr(), -(PROGRESS_WINDOW_DAYS - 1));
+      const seen = new Set();
+      state.history.filter(h => h.date >= since).forEach(h => h.words.forEach(en => seen.add(h.lvl + ":" + en)));
+      return seen.size;
+    }
+
     function renderTop() {
       const top = el("div", "top");
-      top.append(el("div", "greeting", "Merhaba " + state.name + " 👋"));
+      const row = el("div", "top-row");
+      row.append(el("div", "greeting", "Merhaba " + state.name + " 👋"));
+      if (!inPlacement()) {
+        const toggle = el("button", "link-btn", view === "progress" ? "Çalışmaya dön" : "İlerleme");
+        toggle.type = "button";
+        toggle.addEventListener("click", () => { view = view === "progress" ? "study" : "progress"; render(); });
+        row.append(toggle);
+      }
+      top.append(row);
 
-      const r = inPlacement() ? state.placement : state.round;
       const bar = el("div", "level-bar");
       const left = el("span");
       if (inPlacement()) {
         left.append(el("strong", null, "Seviye testi"));
+      } else if (state.day.allDone) {
+        left.append(el("strong", null, "Tüm seviyeler tamamlandı"));
       } else {
-        left.append(el("strong", null, level().id), " · " + (state.phase === "choice" ? "Seçmeli tur" : "Yazma turu"));
+        left.append(el("strong", null, "Gün " + state.day.number),
+          " · " + LEVELS[state.day.lvl].id + " · " + PHASE_LABELS[state.day.phase]);
       }
       bar.append(left);
+      top.append(bar);
 
-      const percent = r.answered === 0 ? 0 : Math.round((r.correct / r.answered) * 100);
-      const stats = el("div", "stats");
-      [
-        [r.answered, "Cevaplanan", ""],
-        [r.correct, "Doğru", "correct"],
-        [r.wrong, "Yanlış", "wrong"],
-        ["%" + percent, "Başarı", ""],
-      ].forEach(([value, label, tone]) => {
-        const box = el("div", "stat");
-        box.append(el("div", "stat-value " + tone, String(value)), el("div", "stat-label", label));
-        stats.append(box);
-      });
-
-      top.append(bar, stats);
+      const holder = inPlacement() ? state.placement
+        : (view === "study" && state.day.round && ["choice", "write"].includes(state.day.phase)) ? state.day.round
+        : null;
+      if (holder) {
+        const percent = holder.answered === 0 ? 0 : Math.round((holder.correct / holder.answered) * 100);
+        const stats = el("div", "stats");
+        [
+          [holder.answered, "Cevaplanan", ""],
+          [holder.correct, "Doğru", "correct"],
+          [holder.wrong, "Yanlış", "wrong"],
+          ["%" + percent, "Başarı", ""],
+        ].forEach(([value, label, tone]) => {
+          const box = el("div", "stat");
+          box.append(el("div", "stat-value " + tone, String(value)), el("div", "stat-label", label));
+          stats.append(box);
+        });
+        top.append(stats);
+      }
       return top;
     }
 
@@ -521,10 +664,11 @@ const Stage1 = {
       const btn = el("button", "reset", "İlerlemeyi sıfırla");
       btn.type = "button";
       btn.addEventListener("click", () => {
-        if (!confirm("İsmin, seviye testi sonucun ve tüm ilerlemen silinecek; uygulama baştan başlayacak. Emin misin?")) return;
+        if (!confirm("İsmin, seviye testi sonucun, serin ve tüm ilerlemen silinecek; uygulama baştan başlayacak. Emin misin?")) return;
         clearTimeout(autoNextTimer);
         clearSaved();
         state = freshState();
+        view = "study";
         save(state);
         render();
       });
@@ -541,17 +685,27 @@ const Stage1 = {
         return;
       }
 
-      container.append(renderTop());
       if (inPlacement()) {
+        container.append(renderTop());
         const p = state.placement;
         if (p.index >= p.deck.length && !p.lastAnswer) card.append(renderPlacementResult());
         else renderPlacementCard(card);
-      } else {
-        const r = state.round;
-        if (r.index >= r.deck.length && !r.lastAnswer) card.append(renderSummary());
-        else if (state.phase === "choice") renderChoiceCard(card);
-        else renderWriteCard(card);
+        container.append(card, resetButton());
+        return;
       }
+
+      ensureToday(); // gün değiştiyse (gece yarısı geçtiyse) yeni günün kelimeleri burada gelir
+      container.append(renderTop());
+      const day = state.day;
+
+      if (view === "progress") card.append(renderProgress());
+      else if (day.allDone) card.append(renderAllDone());
+      else if (day.phase === "sentence") renderSentenceCard(card);
+      else if (day.phase === "done") card.append(renderDayDone());
+      else if (day.round.index >= day.round.deck.length && !day.round.lastAnswer) card.append(renderPhaseSummary());
+      else if (day.phase === "choice") renderChoiceCard(card);
+      else renderWriteCard(card);
+
       container.append(card, resetButton());
     }
 
@@ -591,70 +745,112 @@ const Stage1 = {
       queueMicrotask(() => input.focus());
     }
 
-    // Test sonucu: A1 sorularındaki başarıya göre başlangıç seviyesi.
+    // Test sonucu: toplam doğru sayısına göre başlangıç seviyesi. Sonuç kaydedilir, test bir daha sorulmaz.
     function renderPlacementResult() {
       const p = state.placement;
-      const startIndex = p.a1Correct >= PLACEMENT_A1_PASS ? 1 : 0;
+      const startIndex = p.correct >= PLACEMENT_PASS ? 1 : 0;
       const box = el("div", "summary");
       box.append(
         el("h2", null, "Seviye testi bitti"),
         el("p", null, p.deck.length + " sorudan " + p.correct + " tanesini bildin."),
-        el("p", null, LEVELS[0].id + " kelimelerinden " + p.a1Correct + "/" + PLACEMENT_PER_LEVEL + " doğru."),
+        el("p", null, LEVELS[1].id + " için en az " + PLACEMENT_PASS + " doğru gerekiyordu."),
         el("p", null, LEVELS[startIndex].id + " seviyesinden başlıyorsun."),
         actionButton("Başla", () => {
           state.placement = null;
           state.needsPlacement = false;
           state.levelIndex = startIndex;
-          startLevel(state);
+          state.day = null;
         }),
       );
       return box;
     }
 
-    // Tur sonu: seçmeli turdan yazma turuna, ya da sonraki seviyeye.
-    function renderSummary() {
-      const r = state.round;
+    // Seçmeli ya da yazma adımı bittiğinde bir sonraki adıma geçiş.
+    function renderPhaseSummary() {
+      const day = state.day;
+      const r = day.round;
       const box = el("div", "summary");
+      const toSentence = () => { day.phase = "sentence"; day.sentenceIndex = 0; };
 
-      if (state.phase === "choice" && state.mistakes.length > 0) {
-        const percent = Math.round((r.correct / r.answered) * 100);
+      if (day.phase === "choice") {
         box.append(
-          el("h2", null, "Seçmeli tur bitti"),
-          el("p", null, "Doğru: " + r.correct + " · Yanlış: " + r.wrong + " · Başarı: %" + percent),
-          el("p", null, "Yanlış yaptığın " + state.mistakes.length +
-            " kelimeyi şimdi şıksız soracağım; Türkçe anlamını yazacaksın."),
-          actionButton("Yazma turuna başla", () => {
-            state.phase = "write";
-            state.round = newRound(shuffle(state.mistakes));
-          }),
+          el("h2", null, "Seçmeli sorular bitti"),
+          el("p", null, "Doğru: " + r.correct + " · Yanlış: " + r.wrong),
         );
+        if (day.mistakes.length > 0) {
+          box.append(
+            el("p", null, "Yanlış yaptığın " + day.mistakes.length +
+              " kelimeyi şimdi şıksız soracağım; Türkçe anlamını yazacaksın."),
+            actionButton("Yazma adımına geç", () => {
+              day.phase = "write";
+              day.round = newRound(shuffle(day.mistakes));
+            }),
+          );
+        } else {
+          box.append(
+            el("p", null, "Hepsini bildin! Sırada cümle alıştırması var."),
+            actionButton("Cümle alıştırmasına geç", toSentence),
+          );
+        }
         return box;
       }
 
-      const hasNext = state.levelIndex + 1 < LEVELS.length;
-      box.append(el("h2", null, level().id + " tamamlandı!"));
-      if (hasNext) {
-        const nextId = LEVELS[state.levelIndex + 1].id;
-        box.append(
-          el("p", null, nextId + " seviyesine geçiyorsun."),
-          actionButton(nextId + " seviyesine başla", () => {
-            state.levelIndex++;
-            startLevel(state);
-          }),
-        );
-      } else {
-        box.append(el("p", null, "Şu an mevcut olan tüm seviyeleri tamamladın."));
+      box.append(
+        el("h2", null, "Yazma adımı bitti"),
+        el("p", null, "Sırada cümle alıştırması var: günün her kelimesiyle bir İngilizce cümle kuracaksın."),
+        actionButton("Cümle alıştırmasına geç", toSentence),
+      );
+      return box;
+    }
+
+    function renderDayDone() {
+      const box = el("div", "summary");
+      box.append(
+        el("h2", null, "Gün " + state.day.number + " tamamlandı! 🎉"),
+        el("p", null, "Bugünkü " + state.day.words.length + " kelimeyi bitirdin. Yarın yeni kelimeler gelecek."),
+        actionButton("İlerlemeyi gör", () => { view = "progress"; }),
+      );
+      return box;
+    }
+
+    function renderAllDone() {
+      const box = el("div", "summary");
+      box.append(
+        el("h2", null, "Tebrikler!"),
+        el("p", null, "Mevcut tüm seviyelerin kelimelerini gördün. Yeni kelime şimdilik yok."),
+      );
+      return box;
+    }
+
+    function renderProgress() {
+      const box = el("div", "summary");
+      box.append(el("h2", null, "İlerleme"));
+      const list = el("ul", "progress-list");
+      const rows = [
+        ["Seri", streakDays() + " gün üst üste"],
+        ["Son " + PROGRESS_WINDOW_DAYS + " günde görülen kelime", String(wordsSeenInWindow())],
+        ["Çalışma günü", "Gün " + state.dayCount],
+      ];
+      if (!state.day.allDone) {
+        const id = LEVELS[state.day.lvl].id;
+        rows.push(["Seviye", id + " · " + (state.seen[id] || []).length + "/" + LEVELS[state.day.lvl].words.length + " kelime"]);
       }
+      rows.forEach(([label, value]) => {
+        const li = el("li");
+        li.append(el("span", null, label), el("span", "value", value));
+        list.append(li);
+      });
+      box.append(list, actionButton("Çalışmaya dön", () => { view = "study"; }));
       return box;
     }
 
     // Cevaptan sonra sonuç kısa süre görünür, ardından kendiliğinden sonraki karta geçilir.
     const AUTO_NEXT_MS = { correct: 1000, wrong: 2500 };
     let autoNextTimer = null;
-    function autoNext(isCorrect, holder) {
+    function autoNext(isCorrect, onAdvance) {
       clearTimeout(autoNextTimer);
       autoNextTimer = setTimeout(() => {
-        holder.lastAnswer = null;
+        onAdvance();
         save(state);
         render();
       }, isCorrect ? AUTO_NEXT_MS.correct : AUTO_NEXT_MS.wrong);
@@ -669,7 +865,7 @@ const Stage1 = {
       container.querySelector(".top").replaceWith(renderTop());
     }
 
-    // Ortak şıklı soru kartı (seçmeli tur ve seviye testi).
+    // Ortak şıklı soru kartı (günlük seçmeli sorular ve seviye testi).
     function renderChoiceQuestion(card, { holder, word, pool, extra, onAnswered }) {
       // Cevaplanmış ama henüz geçilmemiş soru varsa (ör. sayfa yenilendi) onu sonuçlu göster.
       const pending = holder.lastAnswer;
@@ -700,7 +896,7 @@ const Stage1 = {
         feedback.textContent = isCorrect
           ? "Doğru!"
           : "Yanlış. Doğru cevap: " + correctLetter + ") " + word.tr;
-        autoNext(isCorrect, holder);
+        autoNext(isCorrect, () => { holder.lastAnswer = null; });
       }
 
       function answer(picked) {
@@ -725,26 +921,27 @@ const Stage1 = {
         word: pool.find(w => w.en === item.en),
         pool,
         extra: { lvl: item.lvl },
-        onAnswered: ok => { if (ok && item.lvl === 0) p.a1Correct++; },
+        onAnswered: () => {},
       });
     }
 
     function renderChoiceCard(card) {
-      const r = state.round;
-      const word = findWord(r.lastAnswer ? r.lastAnswer.en : r.deck[r.index]);
+      const day = state.day;
+      const r = day.round;
+      const word = findDayWord(r.lastAnswer ? r.lastAnswer.en : r.deck[r.index]);
       renderChoiceQuestion(card, {
         holder: r,
         word,
-        pool: level().words,
+        pool: dayPool(),
         extra: {},
-        onAnswered: ok => { if (!ok) state.mistakes.push(word.en); },
+        onAnswered: ok => { if (!ok) day.mistakes.push(word.en); },
       });
     }
 
     function renderWriteCard(card) {
-      const r = state.round;
+      const r = state.day.round;
       const pending = r.lastAnswer;
-      const word = findWord(pending ? pending.en : r.deck[r.index]);
+      const word = findDayWord(pending ? pending.en : r.deck[r.index]);
 
       card.append(el("div", "word", word.en.toUpperCase()));
       card.append(el("div", "write-hint", "Türkçe anlamını yaz"));
@@ -775,8 +972,8 @@ const Stage1 = {
         feedback.className = "feedback " + (isCorrect ? "correct" : "wrong");
         feedback.textContent = isCorrect
           ? "Doğru! (" + word.tr + ")"
-          : "Yanlış. Doğrusu: " + word.tr + " — bu kelime turun sonunda tekrar gelecek.";
-        autoNext(isCorrect, r);
+          : "Yanlış. Doğrusu: " + word.tr + " — bu kelime sonra tekrar gelecek.";
+        autoNext(isCorrect, () => { r.lastAnswer = null; });
       }
 
       form.addEventListener("submit", event => {
@@ -794,7 +991,58 @@ const Stage1 = {
       else queueMicrotask(() => input.focus()); // kart ekrana eklendikten sonra imleç kutuya gelsin
     }
 
-    save(state);
+    // Cümle alıştırması: günün her kelimesiyle, doğru olana kadar.
+    function renderSentenceCard(card) {
+      const day = state.day;
+      const word = findDayWord(day.words[day.sentenceIndex]);
+
+      card.append(el("div", "word", word.en.toUpperCase()));
+      card.append(el("div", "write-hint",
+        "Bu kelimeyle İngilizce bir cümle yaz (en az " + MIN_SENTENCE_WORDS + " kelime)"));
+
+      const form = el("form", "write-form");
+      const input = el("input", "write-input");
+      input.type = "text";
+      input.autocomplete = "off";
+      input.setAttribute("autocapitalize", "sentences");
+      input.spellcheck = false;
+      const check = el("button", "primary", "Kontrol et");
+      check.type = "submit";
+      check.style.marginTop = "0";
+      form.append(input, check);
+
+      const feedback = el("div", "feedback");
+
+      form.addEventListener("submit", event => {
+        event.preventDefault();
+        if (!input.value.trim()) return;
+        const result = checkSentence(input.value, word.en);
+        if (!result.ok) {
+          input.classList.add("wrong");
+          feedback.className = "feedback wrong";
+          feedback.textContent = "Yanlış, tekrar dene. " + result.reason;
+          input.focus();
+          return;
+        }
+        input.classList.remove("wrong");
+        input.classList.add("correct");
+        input.disabled = true;
+        check.remove();
+        feedback.className = "feedback correct";
+        feedback.textContent = "Doğru!";
+        day.sentenceIndex++;
+        if (day.sentenceIndex >= day.words.length) day.phase = "done";
+        save(state);
+        container.querySelector(".top").replaceWith(renderTop());
+        autoNext(true, () => {});
+      });
+      input.addEventListener("input", () => input.classList.remove("wrong"));
+
+      card.append(form, feedback,
+        el("div", "remaining", "Cümle " + (day.sentenceIndex + 1) + " / " + day.words.length));
+      queueMicrotask(() => input.focus());
+    }
+
     render();
   },
 };
